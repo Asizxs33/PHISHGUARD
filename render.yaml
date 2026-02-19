@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: phishguard-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: RENDER
+        value: "true"

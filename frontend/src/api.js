@@ -1,0 +1,43 @@
+import axios from 'axios'
+
+const API_BASE = '/api'
+
+const api = axios.create({
+    baseURL: API_BASE,
+    headers: {
+        'Content-Type': 'application/json'
+    }
+})
+
+export const analyzeUrl = async (url) => {
+    const response = await api.post('/analyze-url', { url })
+    return response.data
+}
+
+export const analyzeEmail = async (subject, body, sender) => {
+    const response = await api.post('/analyze-email', { subject, body, sender })
+    return response.data
+}
+
+export const analyzeQr = async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post('/analyze-qr', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+}
+
+export const getHistory = async (limit = 50, type = null) => {
+    const params = { limit }
+    if (type) params.type = type
+    const response = await api.get('/history', { params })
+    return response.data
+}
+
+export const getStats = async () => {
+    const response = await api.get('/stats')
+    return response.data
+}
+
+export default api
