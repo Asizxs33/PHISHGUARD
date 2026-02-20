@@ -22,6 +22,9 @@ COPY . .
 # Create models directory if it doesn't exist
 RUN mkdir -p models
 
+# Train models during build to ensure they exist
+RUN python -m ml.train_model
+
 # Expose port
 EXPOSE 10000
 
