@@ -105,6 +105,7 @@ body::after {
   animation: rotateBorder 4s linear infinite;
   opacity: 0;
   transition: opacity 0.3s;
+  pointer-events: none;
 }
 
 .glow-border:hover::before {
@@ -291,6 +292,8 @@ body::after {
   font-size: 0.95rem;
   transition: all 0.3s;
   width: 100%;
+  position: relative;
+  z-index: 1;
 }
 
 .input-dark:focus {

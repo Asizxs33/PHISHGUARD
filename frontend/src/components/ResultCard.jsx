@@ -113,6 +113,27 @@ export function ResultCard({ result }) {
                 </div>
             </div>
 
+            {result.detailed_analysis?.length > 0 && (
+                <div className="mt-6 p-5 rounded-xl bg-orange-500/5 border-orange-500/15 border">
+                    <h4 className="font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                        <span className="text-base">⚠️</span> Қауіптілік себептері / Причины опасности
+                    </h4>
+                    <ul className="space-y-4">
+                        {result.detailed_analysis.map((item, i) => (
+                            <li key={i} className="text-sm text-slate-400 flex flex-col gap-1">
+                                <div className="flex gap-3">
+                                    <span className="text-orange-500/50 font-mono text-xs mt-0.5">[{String(i + 1).padStart(2, '0')}]</span>
+                                    <span className="text-slate-300">{item.kz}</span>
+                                </div>
+                                <div className="pl-9 text-xs text-slate-500 font-light max-w-[90%]">
+                                    {item.ru}
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             {result.recommendations?.length > 0 && (
                 <div className={`mt-6 p-5 rounded-xl border
                     ${result.verdict === 'phishing' ? 'bg-rose-500/5 border-rose-500/15'
