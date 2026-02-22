@@ -54,7 +54,7 @@ export default function Layout({ children }) {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 py-3 px-3 space-y-0.5">
+                <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto">
                     {navItems.map(item => (
                         <NavLink key={item.path} to={item.path} end={item.path === '/'}
                             onClick={() => setOpen(false)}
@@ -78,6 +78,17 @@ export default function Layout({ children }) {
                             )}
                         </NavLink>
                     ))}
+
+                    <div className="pt-4 pb-2 px-4">
+                        <div className="h-px bg-indigo-500/10 w-full mb-4" />
+                        <a href="https://t.me/CyberQalqanBot" target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm text-cyan-400 bg-cyan-500/5 
+                                border border-cyan-500/10 hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all group">
+                            <span className="text-lg group-hover:scale-110 transition-transform">✈</span>
+                            <span className="flex-1 font-semibold">Telegram Bot</span>
+                            <span className="text-[0.6rem] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded uppercase tracking-wider">Join</span>
+                        </a>
+                    </div>
                 </nav>
 
                 {/* Status panel */}
@@ -107,6 +118,15 @@ export default function Layout({ children }) {
                 <div key={location.pathname} className="fade-up max-w-[1050px]">
                     {children}
                 </div>
+
+                {/* Telegram FAB for mobile/small screens */}
+                <a href="https://t.me/CyberQalqanBot" target="_blank" rel="noopener noreferrer"
+                    className="fixed bottom-6 right-6 z-[90] w-14 h-14 rounded-2xl 
+                        bg-[#229ED9] flex items-center justify-center shadow-lg shadow-[#229ED9]/40
+                        hover:scale-110 active:scale-95 transition-all md:hidden group">
+                    <span className="text-white text-2xl group-hover:rotate-12 transition-transform">✈</span>
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-[#08080f] animate-bounce" />
+                </a>
             </main>
 
             {/* Overlay */}

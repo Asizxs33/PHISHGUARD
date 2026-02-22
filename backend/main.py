@@ -44,14 +44,21 @@ email_classifier = PhishingClassifier()
 
 @app.on_event("startup")
 def startup():
-    """Initialize database and load ML models."""
+    """Initialize database, load ML models, and start Telegram bot."""
     init_db()
 
     if not url_classifier.load('url_model'):
-        print("⚠️ URL model not found. Run 'python -m ml.train_model' first.")
+        print("⚠️ URL model not found.")
 
     if not email_classifier.load('email_model'):
-        print("⚠️ Email model not found. Run 'python -m ml.train_model' first.")
+        print("⚠️ Email model not found.")
+
+    # Start Telegram bot in background thread
+    try:
+        from bot_integration import start_bot_thread
+        start_bot_thread()
+    except Exception as e:
+        print(f"⚠️ Failed to start Telegram bot: {e}")
 
 
 # ─── Request/Response Models ─────────────────────────────────────────────
