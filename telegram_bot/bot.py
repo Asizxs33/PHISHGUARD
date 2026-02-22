@@ -3,21 +3,15 @@ CyberQalqan AI — Telegram Bot
 Full-featured phishing detection & cybersecurity advisor bot.
 Connects to the existing FastAPI backend on Render.
 
-Commands:
-  /start      — Welcome message with menu
-  /url        — Analyze a URL for phishing
-  /email      — Analyze email content
-  /qr         — Analyze QR code (send photo)
-  /stats      — View analysis statistics
-  /history    — View recent analysis history
-  /help       — Show help
-  Any text    — AI cybersecurity chat
+Deployed as a Web Service on Render (free tier) with a health endpoint.
 """
 
 import os
 import io
 import logging
+import threading
 import httpx
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 
 from telegram import (
@@ -44,6 +38,7 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_URL = os.getenv("API_URL", "https://phishguard-api-lpki.onrender.com")
+PORT = int(os.getenv("PORT", 8080))
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -53,6 +48,26 @@ logger = logging.getLogger(__name__)
 
 # Conversation states
 WAITING_URL, WAITING_EMAIL_SUBJECT, WAITING_EMAIL_BODY, WAITING_EMAIL_SENDER, WAITING_QR = range(5)
+
+
+# ─── Health Check HTTP Server (keeps Render happy) ───────────────────────
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status":"ok","service":"CyberQalqan Telegram Bot"}')
+
+    def log_message(self, format, *args):
+        pass  # Suppress logs
+
+
+def start_health_server():
+    """Start a simple HTTP server for Render health checks."""
+    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
+    logger.info(f"🌐 Health server on port {PORT}")
+    server.serve_forever()
 
 
 # ─── API Helper ──────────────────────────────────────────────────────────
@@ -118,9 +133,7 @@ RISK_TEXT = {
 
 
 def escape_md(text: str) -> str:
-    """Escape special markdown characters to avoid parse errors."""
-    # For Markdown V1, we need to be careful with * _ ` [
-    # We'll just replace problematic backticks in data
+    """Escape special markdown characters."""
     return text.replace("`", "'")
 
 
@@ -135,7 +148,6 @@ def format_analysis_result(result: dict, input_label: str = "URL") -> str:
     v_text = VERDICT_TEXT.get(verdict, verdict)
     r_text = RISK_TEXT.get(risk, risk)
 
-    # Score bar
     filled = int(score * 10)
     bar = "█" * filled + "░" * (10 - filled)
 
@@ -149,22 +161,19 @@ def format_analysis_result(result: dict, input_label: str = "URL") -> str:
         "",
     ]
 
-    # Detailed analysis (KZ only for brevity)
     analysis = result.get("detailed_analysis", [])
     if analysis:
         lines.append("🔍 *Талдау нәтижелері:*")
-        for item in analysis[:5]:  # max 5 items
+        for item in analysis[:5]:
             if isinstance(item, dict):
                 text = item.get("kz", item.get("ru", item.get("en", "")))
             else:
                 text = str(item)
             if text:
-                # Remove markdown-conflicting chars from dynamic content
                 text = text.replace("*", "").replace("_", "").replace("`", "'")
                 lines.append(f"  {text}")
         lines.append("")
 
-    # Recommendations (KZ)
     recs = result.get("recommendations", [])
     if recs:
         lines.append("💡 *Ұсыныстар:*")
@@ -233,7 +242,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def url_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start URL analysis flow."""
-    # Check if URL was provided inline: /url https://example.com
     if context.args:
         url = " ".join(context.args)
         await _analyze_url(update, context, url)
@@ -261,7 +269,6 @@ async def _analyze_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: 
     await update.message.chat.send_action(ChatAction.TYPING)
 
     safe_url = escape_md(url[:80])
-
     msg = await update.message.reply_text(
         f"🔍 Тексерілуде...\n{safe_url}\n\n⏳ Күте тұрыңыз..."
     )
@@ -274,7 +281,6 @@ async def _analyze_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: 
         try:
             await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
         except Exception:
-            # Fallback without markdown if parse fails
             await msg.edit_text(text.replace("*", ""))
     else:
         await msg.edit_text(
@@ -300,20 +306,14 @@ async def receive_email_subject(update: Update, context: ContextTypes.DEFAULT_TY
     """Receive email subject."""
     subject = update.message.text.strip()
     context.user_data["email_subject"] = "" if subject == "-" else subject
-
-    await update.message.reply_text(
-        "📝 Хат мәтінін жіберіңіз (body):"
-    )
+    await update.message.reply_text("📝 Хат мәтінін жіберіңіз (body):")
     return WAITING_EMAIL_BODY
 
 
 async def receive_email_body(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Receive email body."""
     context.user_data["email_body"] = update.message.text.strip()
-
-    await update.message.reply_text(
-        "📨 Жіберушінің email мекенжайын жазыңыз (немесе -):"
-    )
+    await update.message.reply_text("📨 Жіберушінің email мекенжайын жазыңыз (немесе -):")
     return WAITING_EMAIL_SENDER
 
 
@@ -326,36 +326,24 @@ async def receive_email_sender(update: Update, context: ContextTypes.DEFAULT_TYP
     body = context.user_data.get("email_body", "")
 
     await update.message.chat.send_action(ChatAction.TYPING)
-
-    msg = await update.message.reply_text(
-        "🔍 Email тексерілуде...\n⏳ Күте тұрыңыз..."
-    )
+    msg = await update.message.reply_text("🔍 Email тексерілуде...\n⏳ Күте тұрыңыз...")
 
     result = await api_request("POST", "/api/analyze-email", json={
-        "subject": subject,
-        "body": body,
-        "sender": sender
+        "subject": subject, "body": body, "sender": sender
     })
 
     if result:
         safe_subject = escape_md(subject[:40] or "жоқ")
         safe_sender = escape_md(sender[:40] or "белгісіз")
-        header = (
-            f"📧 *Email талдау*\n"
-            f"  Тақырып: {safe_subject}\n"
-            f"  Жіберуші: {safe_sender}\n\n"
-        )
+        header = f"📧 *Email талдау*\n  Тақырып: {safe_subject}\n  Жіберуші: {safe_sender}\n\n"
         text = header + format_analysis_result(result, "Email")
         try:
             await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
         except Exception:
             await msg.edit_text(text.replace("*", ""))
     else:
-        await msg.edit_text(
-            "❌ Қате! Серверге қосылу мүмкін болмады."
-        )
+        await msg.edit_text("❌ Қате! Серверге қосылу мүмкін болмады.")
 
-    # Cleanup
     context.user_data.pop("email_subject", None)
     context.user_data.pop("email_body", None)
     return ConversationHandler.END
@@ -377,7 +365,6 @@ async def qr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receive_qr_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Receive QR photo and analyze."""
-    # Get photo (largest version)
     if update.message.photo:
         photo = update.message.photo[-1]
     elif update.message.document:
@@ -387,16 +374,11 @@ async def receive_qr_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_QR
 
     await update.message.chat.send_action(ChatAction.TYPING)
+    msg = await update.message.reply_text("🔍 QR-код тексерілуде...\n⏳ Күте тұрыңыз...")
 
-    msg = await update.message.reply_text(
-        "🔍 QR-код тексерілуде...\n⏳ Күте тұрыңыз..."
-    )
-
-    # Download photo
     file = await photo.get_file()
     photo_bytes = await file.download_as_bytearray()
 
-    # Send to API as multipart with httpx
     result = await api_request(
         "POST", "/api/analyze-qr",
         files={"file": ("qr.png", io.BytesIO(photo_bytes), "image/png")}
@@ -405,20 +387,14 @@ async def receive_qr_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if result:
         decoded_url = result.get("decoded_url", "белгісіз")
         safe_url = escape_md(decoded_url[:60])
-        header = (
-            f"📷 *QR Код Талдау*\n"
-            f"  Сілтеме: {safe_url}\n\n"
-        )
+        header = f"📷 *QR Код Талдау*\n  Сілтеме: {safe_url}\n\n"
         text = header + format_analysis_result(result, "QR")
         try:
             await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
         except Exception:
             await msg.edit_text(text.replace("*", ""))
     else:
-        await msg.edit_text(
-            "❌ QR-код оқылмады!\n"
-            "Сурет сапасын тексеріңіз немесе басқа фото жіберіңіз."
-        )
+        await msg.edit_text("❌ QR-код оқылмады!\nСурет сапасын тексеріңіз немесе басқа фото жіберіңіз.")
 
     return ConversationHandler.END
 
@@ -428,7 +404,6 @@ async def receive_qr_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show analysis statistics."""
     await update.message.chat.send_action(ChatAction.TYPING)
-
     result = await api_request("GET", "/api/stats")
 
     if result:
@@ -438,7 +413,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         phishing = result.get("phishing", 0)
         by_type = result.get("by_type", {})
 
-        # Percentages
         safe_pct = (safe / total * 100) if total > 0 else 0
         sus_pct = (suspicious / total * 100) if total > 0 else 0
         phish_pct = (phishing / total * 100) if total > 0 else 0
@@ -457,10 +431,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
     else:
-        await update.message.reply_text(
-            "❌ Статистиканы жүктеу мүмкін болмады.\n"
-            "Сервер ояту үшін 1-2 минут күтіңіз."
-        )
+        await update.message.reply_text("❌ Статистиканы жүктеу мүмкін болмады.\nСервер ояту үшін 1-2 минут күтіңіз.")
 
 
 # ─── History ──────────────────────────────────────────────────────────────
@@ -468,12 +439,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show recent analysis history."""
     await update.message.chat.send_action(ChatAction.TYPING)
-
     result = await api_request("GET", "/api/history", params={"limit": 10})
 
     if result and result.get("history"):
         lines = ["📜 *Соңғы тексерулер:*\n"]
-
         type_emoji = {"url": "🔗", "email": "📧", "qr": "📷"}
 
         for i, item in enumerate(result["history"], 1):
@@ -484,17 +453,10 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             inp = escape_md(item.get("input", "")[:35])
             score = item.get("score", 0)
             ts = item.get("timestamp", "")[:10]
-
-            lines.append(
-                f"*{i}.* {emoji} {v_emoji} {inp}\n"
-                f"     Ұпай: {score:.0%} | {ts}"
-            )
+            lines.append(f"*{i}.* {emoji} {v_emoji} {inp}\n     Ұпай: {score:.0%} | {ts}")
 
         try:
-            await update.message.reply_text(
-                "\n".join(lines),
-                parse_mode=ParseMode.MARKDOWN
-            )
+            await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
         except Exception:
             await update.message.reply_text("\n".join(lines).replace("*", ""))
     elif result:
@@ -503,66 +465,48 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Тарихты жүктеу мүмкін болмады.")
 
 
-# ─── AI Chat (Cybersecurity Advisor) ─────────────────────────────────────
+# ─── AI Chat ─────────────────────────────────────────────────────────────
 
 async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle AI cybersecurity chat — any text message that isn't a command or URL."""
+    """Handle AI cybersecurity chat."""
     text = update.message.text.strip()
 
-    # Auto-detect URLs and analyze them
+    # Auto-detect URLs
     if text.startswith(("http://", "https://", "www.")):
         await _analyze_url(update, context, text)
         return
 
     await update.message.chat.send_action(ChatAction.TYPING)
-
     result = await api_request("POST", "/api/chat", json={"message": text})
 
     if result:
         answer = result.get("answer", {})
         if isinstance(answer, dict):
-            # Multi-language answer, prefer KZ
             response_text = answer.get("kz", answer.get("ru", answer.get("en", "...")))
         else:
             response_text = str(answer)
 
-        # Clean up markdown conflicts
         safe_response = response_text.replace("`", "'")
-
         try:
-            await update.message.reply_text(
-                f"🤖 *CyberQalqan AI:*\n\n{safe_response}",
-                parse_mode=ParseMode.MARKDOWN
-            )
+            await update.message.reply_text(f"🤖 *CyberQalqan AI:*\n\n{safe_response}", parse_mode=ParseMode.MARKDOWN)
         except Exception:
-            # Fallback without markdown
-            await update.message.reply_text(
-                f"🤖 CyberQalqan AI:\n\n{response_text}"
-            )
+            await update.message.reply_text(f"🤖 CyberQalqan AI:\n\n{response_text}")
     else:
-        await update.message.reply_text(
-            "❌ AI кеңесшіге қосылу мүмкін болмады.\n"
-            "Сервер ояну үшін 1-2 минут күтіңіз және қайталаңыз."
-        )
+        await update.message.reply_text("❌ AI кеңесшіге қосылу мүмкін болмады.\nСервер ояну үшін 1-2 минут күтіңіз.")
 
 
-# ─── Button Handlers (Reply Keyboard) ────────────────────────────────────
+# ─── Button Handlers ─────────────────────────────────────────────────────
 
 async def ai_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle AI Chat button press."""
     suggestions = [
-        "📸 Instagram қорғау",
-        "🔐 Құпиясөз қауіпсіздігі",
-        "📱 Телефон бұзылды ма?",
-        "🎣 Фишинг деген не?",
-        "📶 Wi-Fi қауіпсіздік",
-        "🌐 VPN деген не?",
+        "📸 Instagram қорғау", "🔐 Құпиясөз қауіпсіздігі",
+        "📱 Телефон бұзылды ма?", "🎣 Фишинг деген не?",
+        "📶 Wi-Fi қауіпсіздік", "🌐 VPN деген не?",
     ]
     keyboard = [[InlineKeyboardButton(s, callback_data=f"chat_{s}")] for s in suggestions]
     await update.message.reply_text(
-        "💬 *AI Кеңесші*\n\n"
-        "Кибер қауіпсіздік бойынша кез келген сұрақ жазыңыз!\n"
-        "Немесе дайын сұрақтардан таңдаңыз:",
+        "💬 *AI Кеңесші*\n\nКибер қауіпсіздік бойынша кез келген сұрақ жазыңыз!\nНемесе дайын сұрақтардан таңдаңыз:",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -574,9 +518,8 @@ async def inline_button_handler(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
     if query.data.startswith("chat_"):
-        question = query.data[5:]  # Remove "chat_" prefix
+        question = query.data[5:]
         await query.message.chat.send_action(ChatAction.TYPING)
-
         result = await api_request("POST", "/api/chat", json={"message": question})
 
         if result:
@@ -587,39 +530,25 @@ async def inline_button_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 response_text = str(answer)
 
             safe_response = response_text.replace("`", "'")
-
             try:
-                await query.message.reply_text(
-                    f"🤖 *CyberQalqan AI:*\n\n{safe_response}",
-                    parse_mode=ParseMode.MARKDOWN
-                )
+                await query.message.reply_text(f"🤖 *CyberQalqan AI:*\n\n{safe_response}", parse_mode=ParseMode.MARKDOWN)
             except Exception:
-                await query.message.reply_text(
-                    f"🤖 CyberQalqan AI:\n\n{response_text}"
-                )
+                await query.message.reply_text(f"🤖 CyberQalqan AI:\n\n{response_text}")
 
 
-# ─── Cancel Handler ──────────────────────────────────────────────────────
+# ─── Cancel & Error ──────────────────────────────────────────────────────
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancel current operation."""
     context.user_data.clear()
-    await update.message.reply_text(
-        "❌ Бас тартылды. /start — басты мәзірге оралу."
-    )
+    await update.message.reply_text("❌ Бас тартылды. /start — басты мәзірге оралу.")
     return ConversationHandler.END
 
 
-# ─── Error Handler ───────────────────────────────────────────────────────
-
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle errors."""
-    logger.error(f"Exception while handling update: {context.error}")
+    logger.error(f"Exception: {context.error}")
     if update and update.message:
         try:
-            await update.message.reply_text(
-                "⚠️ Қате пайда болды. Қайталап көріңіз."
-            )
+            await update.message.reply_text("⚠️ Қате пайда болды. Қайталап көріңіз.")
         except Exception:
             pass
 
@@ -627,62 +556,49 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ─── Main ────────────────────────────────────────────────────────────────
 
 def main():
-    """Start the bot."""
     if not BOT_TOKEN:
         print("❌ BOT_TOKEN is not set! Check your .env file.")
         return
 
+    # Start health check server in background thread (for Render)
+    health_thread = threading.Thread(target=start_health_server, daemon=True)
+    health_thread.start()
+
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # ── Conversation handler for URL ──
+    # Conversation handlers
     url_conv = ConversationHandler(
         entry_points=[
             CommandHandler("url", url_command),
             MessageHandler(filters.Regex("^🔗 URL тексеру$"), url_command),
         ],
-        states={
-            WAITING_URL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_url),
-            ],
-        },
+        states={WAITING_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_url)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    # ── Conversation handler for Email ──
     email_conv = ConversationHandler(
         entry_points=[
             CommandHandler("email", email_command),
             MessageHandler(filters.Regex("^📧 Email тексеру$"), email_command),
         ],
         states={
-            WAITING_EMAIL_SUBJECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email_subject),
-            ],
-            WAITING_EMAIL_BODY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email_body),
-            ],
-            WAITING_EMAIL_SENDER: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email_sender),
-            ],
+            WAITING_EMAIL_SUBJECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email_subject)],
+            WAITING_EMAIL_BODY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email_body)],
+            WAITING_EMAIL_SENDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_email_sender)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    # ── Conversation handler for QR ──
     qr_conv = ConversationHandler(
         entry_points=[
             CommandHandler("qr", qr_command),
             MessageHandler(filters.Regex("^📷 QR код тексеру$"), qr_command),
         ],
-        states={
-            WAITING_QR: [
-                MessageHandler(filters.PHOTO | filters.Document.IMAGE, receive_qr_photo),
-            ],
-        },
+        states={WAITING_QR: [MessageHandler(filters.PHOTO | filters.Document.IMAGE, receive_qr_photo)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    # Register handlers (order matters!)
+    # Register handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("stats", stats_command))
@@ -692,26 +608,18 @@ def main():
     app.add_handler(email_conv)
     app.add_handler(qr_conv)
 
-    # Inline buttons
     app.add_handler(CallbackQueryHandler(inline_button_handler))
-
-    # Reply keyboard buttons
     app.add_handler(MessageHandler(filters.Regex("^📊 Статистика$"), stats_command))
     app.add_handler(MessageHandler(filters.Regex("^📜 Тарих$"), history_command))
     app.add_handler(MessageHandler(filters.Regex("^💬 AI Кеңесші$"), ai_button_handler))
-
-    # QR: direct photo without /qr command
     app.add_handler(MessageHandler(filters.PHOTO, receive_qr_photo))
-
-    # Default: AI chat for any text
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_handler))
 
-    # Error handler
     app.add_error_handler(error_handler)
 
-    # Start
     print("🛡️ CyberQalqan AI Telegram Bot is running...")
     print(f"📡 API: {API_URL}")
+    print(f"🌐 Health check: http://0.0.0.0:{PORT}")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
