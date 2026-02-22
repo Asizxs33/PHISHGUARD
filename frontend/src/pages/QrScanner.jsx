@@ -51,7 +51,7 @@ export default function QrScanner() {
                         <h2 className="text-3xl font-black tracking-tight gradient-text">QR КОД ТЕКСЕРУ</h2>
                     </div>
                     <p className="text-slate-500 text-sm ml-4 font-mono">
-                        QR СУРЕТІН ЖҮКТЕУ → ДЕКОДТАУ → URL ҚАУІП ТАЛДАУЫ
+                        SCAN QR → CYBERQALQAN AI DECODE → URL INTEL
                     </p>
                 </div>
             </div>

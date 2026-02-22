@@ -51,7 +51,7 @@ export default function EmailAnalyzer() {
                         <h2 className="text-3xl font-black tracking-tight gradient-text">EMAIL ТАЛДАУ</h2>
                     </div>
                     <p className="text-slate-500 text-sm ml-4 font-mono">
-                        ХАТ МАЗМҰНЫН ҚОЙУ → НЕЙРОЖЕЛІ ТАЛДАУЫ → ФИШИНГ АНЫҚТАУ
+                        МӘТІН + ЖІБЕРУШІ → CYBERQALQAN AI ТАЛДАУ → 22 ВЕКТОР
                     </p>
                 </div>
             </div>

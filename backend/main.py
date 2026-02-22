@@ -1,6 +1,6 @@
 """
-PhishGuard AI — FastAPI Backend
-REST API for phishing detection with ML-powered analysis.
+CyberQalqan AI — FastAPI Backend (Enhanced)
+REST API for phishing detection with ML + Heuristic ensemble analysis.
 """
 
 import os
@@ -17,14 +17,16 @@ from sqlalchemy.orm import Session
 
 from ml.features import extract_url_features, extract_email_features, get_url_feature_names, get_email_feature_names
 from ml.classifier import PhishingClassifier
+from ml.heuristic_analyzer import analyze_url_heuristic, combine_scores
+from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS
 from database import init_db, get_db, save_analysis, get_history, get_stats
 
 # ─── Initialize App ──────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="PhishGuard AI",
-    description="AI-powered phishing detection API with multilingual support (KZ/RU/EN)",
-    version="1.0.0"
+    title="CyberQalqan AI",
+    description="AI-powered phishing detection API with ML + Heuristic ensemble (KZ/RU/EN)",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -77,9 +79,73 @@ class HistoryQuery(BaseModel):
     type: Optional[str] = None
 
 
-# ─── Recommendation Engine ───────────────────────────────────────────────
+# ─── Detailed Analysis Generator ────────────────────────────────────────
+
+def generate_detailed_analysis(features: dict, analysis_type: str, heuristic_issues: list = None) -> list:
+    """Generate detailed multilingual analysis based on features and heuristic issues."""
+    details = []
 
     if analysis_type == 'url':
+        # ── Heuristic-based alerts (from heuristic analyzer) ──
+        if heuristic_issues:
+            for issue in heuristic_issues:
+                issue_type = issue.get('type', '')
+                severity = issue.get('severity', 0)
+
+                if issue_type == 'brand_impersonation' and severity >= 0.8:
+                    brand = issue.get('brand', '')
+                    official = issue.get('official_domains', [''])[0] if issue.get('official_domains') else ''
+                    details.append({
+                        "kz": f"⚠️ Бұл сайт '{brand}' компаниясына ұқсап тұр, бірақ бұл ЖАЛҒАН! Нағыз сайт: {official}. Алаяқтар атақты компаниялардың атын пайдаланып, адамдарды алдайды.",
+                        "ru": f"⚠️ Сайт притворяется компанией '{brand}', но это ПОДДЕЛКА! Настоящий сайт: {official}. Мошенники используют имена известных компаний.",
+                        "en": f"⚠️ This site impersonates '{brand}' but it's FAKE! The real site is: {official}. Scammers use famous brand names to trick people."
+                    })
+
+                elif issue_type == 'typosquatting':
+                    similar = issue.get('similar_to', '')
+                    details.append({
+                        "kz": f"🔍 Бұл сайттың аты нағыз сайтқа ({similar}) өте ұқсас, бірақ бір-екі әріп өзгертілген. Бұл — 'typosquatting' деген алдау тәсілі.",
+                        "ru": f"🔍 Адрес сайта очень похож на настоящий ({similar}), но изменены 1-2 буквы. Это мошенническая техника — 'тайпосквоттинг'.",
+                        "en": f"🔍 The website address looks very similar to the real one ({similar}) but with 1-2 changed letters. This is 'typosquatting' — a phishing technique."
+                    })
+
+                elif issue_type == 'brand_in_subdomain':
+                    brand = issue.get('brand', '')
+                    details.append({
+                        "kz": f"🚫 '{brand}' сөзі сілтемеде бар, бірақ ол нағыз сайт емес. Алаяқтар танымал бренд атын жалған сайтқа кіргізіп қойған.",
+                        "ru": f"🚫 Слово '{brand}' есть в ссылке, но это не настоящий сайт. Мошенники вставили известное название бренда в поддельный адрес.",
+                        "en": f"🚫 The word '{brand}' appears in the link, but this is not the real site. Scammers embed brand names in fake addresses."
+                    })
+
+                elif issue_type == 'mixed_scripts':
+                    details.append({
+                        "kz": "⚠️ Сайт атында латын және кирилл әріптері араластырылған. Бұл — IDN гомограф шабуылы деп аталатын қауіпті алдау.",
+                        "ru": "⚠️ В адресе сайта смешаны латинские и кириллические буквы. Это опасная техника — IDN гомографическая атака.",
+                        "en": "⚠️ The website mixes Latin and Cyrillic characters. This is a dangerous trick called an IDN homograph attack."
+                    })
+
+                elif issue_type == 'at_symbol_redirect':
+                    details.append({
+                        "kz": "🚫 Сілтемеде '@' белгісі бар. Бұл сізді байқатпай басқа қауіпті сайтқа бұрып жіберу үшін қолданылады.",
+                        "ru": "🚫 В ссылке есть символ '@'. Он используется для скрытого перенаправления на совсем другой, опасный сайт.",
+                        "en": "🚫 The link contains '@'. This is used to secretly redirect you to a completely different, dangerous site."
+                    })
+
+                elif issue_type == 'javascript_uri':
+                    details.append({
+                        "kz": "🛑 Сілтемеде JavaScript коды жасырылған. Бұл өте қауіпті — ол сіздің деректеріңізді ұрлауы мүмкін!",
+                        "ru": "🛑 В ссылке спрятан JavaScript код. Это крайне опасно — он может украсть ваши данные!",
+                        "en": "🛑 The link contains hidden JavaScript code. This is extremely dangerous — it can steal your data!"
+                    })
+
+                elif issue_type == 'punycode_domain':
+                    details.append({
+                        "kz": "⚠️ Сайт аты арнайы кодталған (Punycode). Ол нағыз сайтқа ұқсап көрінуі мүмкін, бірақ мүлдем басқа жерге апарады.",
+                        "ru": "⚠️ Адрес сайта закодирован особым образом (Punycode). Он может выглядеть как настоящий, но ведёт совсем в другое место.",
+                        "en": "⚠️ The domain uses special encoding (Punycode). It may look real but actually leads somewhere else."
+                    })
+
+        # ── Feature-based alerts ──
         if features.get('has_ip', 0):
             details.append({
                 "kz": "Сайттың аты жоқ, тек сандар жазылған (мысалы, 192.168.x.x). Банктер мен дүкендер мұндай адресті қолданбайды. Бұл — алаяқтардың сайты.",
@@ -104,7 +170,7 @@ class HistoryQuery(BaseModel):
                 "ru": "В адресе есть слова 'login', 'bank' или 'secure', но это обман. Мошенники специально пишут их, чтобы вы подумали, что это официальный сайт.",
                 "en": "The link has words like 'login' or 'bank', but it's a trick. Scammers add these to make you trust a fake site."
             })
-        if features.get('has_at_symbol', 0):
+        if features.get('has_at_symbol', 0) and not any(i.get('type') == 'at_symbol_redirect' for i in (heuristic_issues or [])):
             details.append({
                 "kz": "Адресте '@' белгісі тұр. Бұл — сізді алдап, басқа сайтқа кіргізу үшін жасалған қулық.",
                 "ru": "В адресе есть значок '@'. Это хитрая уловка, чтобы обмануть браузер и перенаправить вас на другой, опасный сайт.",
@@ -133,6 +199,20 @@ class HistoryQuery(BaseModel):
                 "kz": "Сайттың атында сандар өте көп. Мұны адам емес, компьютер ашқан сияқты. Ол сенімді емес.",
                 "ru": "В названии сайта слишком много цифр. Похоже, его создал робот, а не человек. Такие сайты живут недолго и опасны.",
                 "en": "The website name has too many numbers. It looks like it was made by a robot. These sites are often dangerous scams."
+            })
+
+        # New feature-based alerts
+        if features.get('brand_typosquat', 0) and not any(i.get('type') == 'typosquatting' for i in (heuristic_issues or [])):
+            details.append({
+                "kz": "🔍 Сайт атындағы сөз танымал брендке (Google, Kaspi, т.б.) өте ұқсас, бірақ бірнеше әріп өзгертілген.",
+                "ru": "🔍 Название сайта очень похоже на известный бренд (Google, Kaspi и т.д.), но изменено несколько букв.",
+                "en": "🔍 The domain name closely resembles a known brand but with small letter changes."
+            })
+        if features.get('brand_in_domain', 0) > 0 and not any(i.get('type') in ('brand_impersonation', 'brand_in_subdomain') for i in (heuristic_issues or [])):
+            details.append({
+                "kz": "🚫 Сілтемеде танымал бренд аты бар, бірақ ол нағыз сайт емес.",
+                "ru": "🚫 В ссылке содержится имя известного бренда, но это не настоящий сайт.",
+                "en": "🚫 The link contains a famous brand name but is not the real site."
             })
 
     elif analysis_type == 'email':
@@ -243,28 +323,58 @@ def get_risk_level(score: float) -> str:
 
 @app.post("/api/analyze-url", response_model=AnalysisResponse)
 def analyze_url(request: UrlRequest, db: Session = Depends(get_db)):
-    """Analyze a URL for phishing indicators."""
-    if not url_classifier.is_trained:
-        raise HTTPException(status_code=503, detail="URL model not loaded. Train the model first.")
+    """Analyze a URL for phishing indicators using ML + Heuristic ensemble."""
 
+    # ── Step 1: Heuristic Analysis (always available, no model needed) ──
+    h_score, h_verdict, h_details = analyze_url_heuristic(request.url)
+    heuristic_issues = h_details.get('issues', [])
+
+    # ── Step 2: ML Model Prediction ──
     features = extract_url_features(request.url)
     feature_names = get_url_feature_names()
-    feature_vector = np.array([features[f] for f in feature_names])
 
-    score, verdict, details = url_classifier.predict(feature_vector)
-    risk_level = get_risk_level(score)
-    recommendations = get_recommendations(verdict, "url", features)
-    detailed_analysis = generate_detailed_analysis(features, "url")
+    if url_classifier.is_trained:
+        feature_vector = np.array([features[f] for f in feature_names])
+        ml_score, ml_verdict, ml_details = url_classifier.predict(feature_vector)
+
+        # ── Step 3: Combine ML + Heuristic ──
+        final_score, final_verdict = combine_scores(
+            ml_score, h_score, ml_verdict, h_verdict, heuristic_issues
+        )
+
+        # Merge model details
+        combined_details = {
+            **ml_details,
+            'heuristic_score': h_score,
+            'heuristic_issues_count': len(heuristic_issues),
+            'ml_score': ml_score,
+            'final_ensemble_score': final_score,
+            'analysis_method': 'ML + Heuristic Ensemble',
+        }
+    else:
+        # Fallback: use only heuristic if model not loaded
+        final_score = h_score
+        final_verdict = h_verdict
+        combined_details = {
+            'heuristic_score': h_score,
+            'heuristic_issues_count': len(heuristic_issues),
+            'analysis_method': 'Heuristic Only (ML model not loaded)',
+            'confidence': round(abs(h_score - 0.5) * 2, 4),
+        }
+
+    risk_level = get_risk_level(final_score)
+    recommendations = get_recommendations(final_verdict, "url", features)
+    detailed_analysis = generate_detailed_analysis(features, "url", heuristic_issues)
 
     # Save to history
-    save_analysis(db, 'url', request.url, score, verdict, json.dumps(details))
+    save_analysis(db, 'url', request.url, final_score, final_verdict, json.dumps(combined_details))
 
     return AnalysisResponse(
-        score=score,
-        verdict=verdict,
+        score=final_score,
+        verdict=final_verdict,
         risk_level=risk_level,
         features=features,
-        model_details=details,
+        model_details=combined_details,
         recommendations=recommendations,
         detailed_analysis=detailed_analysis,
         timestamp=datetime.utcnow().isoformat()
@@ -304,9 +414,6 @@ def analyze_email(request: EmailRequest, db: Session = Depends(get_db)):
 @app.post("/api/analyze-qr")
 def analyze_qr(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Analyze a QR code image for phishing URLs."""
-    if not url_classifier.is_trained:
-        raise HTTPException(status_code=503, detail="URL model not loaded. Train the model first.")
-
     try:
         from PIL import Image
         image_data = file.file.read()
@@ -336,25 +443,48 @@ def analyze_qr(file: UploadFile = File(...), db: Session = Depends(get_db)):
         if not decoded_url:
             raise HTTPException(status_code=422, detail="No QR code found in the image or QR code is empty.")
 
-        # Analyze the decoded URL
+        # ── Ensemble Analysis (ML + Heuristic) ──
+        h_score, h_verdict, h_details = analyze_url_heuristic(decoded_url)
+        heuristic_issues = h_details.get('issues', [])
+
         features = extract_url_features(decoded_url)
         feature_names = get_url_feature_names()
-        feature_vector = np.array([features[f] for f in feature_names])
 
-        score, verdict, details = url_classifier.predict(feature_vector)
-        risk_level = get_risk_level(score)
-        recommendations = get_recommendations(verdict, "url", features)
-        detailed_analysis = generate_detailed_analysis(features, "url")
+        if url_classifier.is_trained:
+            feature_vector = np.array([features[f] for f in feature_names])
+            ml_score, ml_verdict, ml_details = url_classifier.predict(feature_vector)
+            final_score, final_verdict = combine_scores(
+                ml_score, h_score, ml_verdict, h_verdict, heuristic_issues
+            )
+            combined_details = {
+                **ml_details,
+                'heuristic_score': h_score,
+                'heuristic_issues_count': len(heuristic_issues),
+                'ml_score': ml_score,
+                'final_ensemble_score': final_score,
+                'analysis_method': 'ML + Heuristic Ensemble',
+            }
+        else:
+            final_score = h_score
+            final_verdict = h_verdict
+            combined_details = {
+                'heuristic_score': h_score,
+                'analysis_method': 'Heuristic Only',
+            }
 
-        save_analysis(db, 'qr', decoded_url, score, verdict, json.dumps(details))
+        risk_level = get_risk_level(final_score)
+        recommendations = get_recommendations(final_verdict, "url", features)
+        detailed_analysis = generate_detailed_analysis(features, "url", heuristic_issues)
+
+        save_analysis(db, 'qr', decoded_url, final_score, final_verdict, json.dumps(combined_details))
 
         return {
             "decoded_url": decoded_url,
-            "score": score,
-            "verdict": verdict,
+            "score": final_score,
+            "verdict": final_verdict,
             "risk_level": risk_level,
             "features": features,
-            "model_details": details,
+            "model_details": combined_details,
             "recommendations": recommendations,
             "detailed_analysis": detailed_analysis,
             "timestamp": datetime.utcnow().isoformat()
@@ -378,16 +508,40 @@ def get_analysis_stats(db: Session = Depends(get_db)):
     return get_stats(db)
 
 
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="User message")
+
+
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    """Cybersecurity AI advisor chat."""
+    result = get_chat_response(request.message)
+    return {
+        "answer": result["answer"],
+        "source": result["source"],
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/api/chat/suggestions")
+def chat_suggestions():
+    """Get suggested questions for the chat."""
+    return {"suggestions": SUGGESTED_QUESTIONS}
+
+
 @app.get("/")
 def root():
     return {
-        "app": "PhishGuard AI",
-        "version": "1.0.0",
+        "app": "CyberQalqan AI",
+        "version": "2.0.0",
         "status": "running",
+        "analysis_engine": "ML Neural Network + Heuristic Rules Ensemble",
         "endpoints": [
             "POST /api/analyze-url",
             "POST /api/analyze-email",
             "POST /api/analyze-qr",
+            "POST /api/chat",
+            "GET /api/chat/suggestions",
             "GET /api/history",
             "GET /api/stats"
         ]

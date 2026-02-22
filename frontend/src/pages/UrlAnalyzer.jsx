@@ -20,15 +20,17 @@ export default function UrlAnalyzer() {
     const examples = [
         { url: 'https://google.com', label: 'google.com', safe: true },
         { url: 'https://kaspi.kz', label: 'kaspi.kz', safe: true },
-        { url: 'http://paypal-secure-login.tk/verify-account', label: 'paypal-fake.tk', safe: false },
-        { url: 'http://192.168.1.1/bank-login/verify', label: 'IP-address login', safe: false },
+        { url: 'http://kaspi-secure-login.tk/verify', label: 'kaspi-fake.tk', safe: false },
+        { url: 'http://gooogle.com/login', label: 'gooogle (typo)', safe: false },
+        { url: 'http://paypal-update.ml/confirm', label: 'paypal-fake.ml', safe: false },
+        { url: 'http://192.168.1.1/bank-login', label: 'IP-address login', safe: false },
     ]
 
     const pipeline = [
-        { n: '01', icon: '📐', title: 'FEATURE EXTRACTION', desc: '18 URL метрика: ұзындық, энтропия, TLD, IP, HTTPS', color: 'from-blue-500' },
-        { n: '02', icon: '🧠', title: 'NEURAL FORWARD PASS', desc: 'ResidualBlock(3) + FeatureAttention + BatchNorm', color: 'from-indigo-500' },
-        { n: '03', icon: '📊', title: 'SCORE COMPUTE', desc: 'Sigmoid → 0-100% қауіп ұпайы + Confidence', color: 'from-purple-500' },
-        { n: '04', icon: '⚡', title: 'CLASSIFICATION', desc: 'Қауіпсіз / Күдікті / Фишинг модельдеу', color: 'from-cyan-500' },
+        { n: '01', icon: '📐', title: 'FEATURE EXTRACTION', desc: '28 URL метрика: бренд ұқсастығы, typosquat, энтропия, TLD, IP', color: 'from-blue-500' },
+        { n: '02', icon: '🧠', title: 'NEURAL NETWORK', desc: 'ResidualBlock(3) + FeatureAttention + BatchNorm', color: 'from-indigo-500' },
+        { n: '03', icon: '🔍', title: 'HEURISTIC ANALYSIS', desc: 'Бренд алдау, typosquatting, IDN гомограф, URL үлгілер', color: 'from-purple-500' },
+        { n: '04', icon: '⚡', title: 'ENSEMBLE SCORING', desc: 'ML + Эвристика → біріккен қауіп бағасы', color: 'from-cyan-500' },
     ]
 
     return (
@@ -42,7 +44,7 @@ export default function UrlAnalyzer() {
                         <h2 className="text-3xl font-black tracking-tight gradient-text">URL ТЕКСЕРУ</h2>
                     </div>
                     <p className="text-slate-500 text-sm ml-4 font-mono">
-                        СІЛТЕМЕНІ ЕНГІЗУ → НЕЙРОЖЕЛІ ТАЛДАУ → ҚАУІП БАҒАЛАУ
+                        URL → CYBERQALQAN AI (28 FEATURES) → ENSEMBLE SCORING
                     </p>
                 </div>
             </div>

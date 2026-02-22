@@ -76,17 +76,29 @@ export function ResultCard({ result }) {
                         <div className="w-1 h-6 rounded-full bg-gradient-to-b from-indigo-400 to-purple-400" />
                         <h3 className="text-lg font-bold text-slate-200 tracking-tight">Талдау нәтижесі</h3>
                         <span className="ml-auto font-mono text-[0.6rem] text-slate-600">
-                            {result.model_details?.model_type || 'Neural Network'}
+                            {result.model_details?.analysis_method || result.model_details?.model_type || 'Neural Network'}
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="grid grid-cols-3 gap-3 mb-5">
                         <div className="glass rounded-xl p-4 border-l-2 border-indigo-500/50 group hover:border-indigo-400 transition-colors">
                             <div className="text-[0.65rem] text-slate-500 font-mono tracking-wider mb-1">НЕЙРОЖЕЛІ</div>
                             <div className="text-2xl font-black text-indigo-400 neon-text">
-                                {(result.model_details?.neural_network_score * 100 || 0).toFixed(1)}
+                                {((result.model_details?.ml_score ?? result.model_details?.neural_network_score ?? 0) * 100).toFixed(1)}
                                 <span className="text-sm text-indigo-500/60">%</span>
                             </div>
+                        </div>
+                        <div className="glass rounded-xl p-4 border-l-2 border-amber-500/50 group hover:border-amber-400 transition-colors">
+                            <div className="text-[0.65rem] text-slate-500 font-mono tracking-wider mb-1">ЭВРИСТИКА</div>
+                            <div className="text-2xl font-black text-amber-400 neon-text">
+                                {((result.model_details?.heuristic_score ?? 0) * 100).toFixed(1)}
+                                <span className="text-sm text-amber-500/60">%</span>
+                            </div>
+                            {result.model_details?.heuristic_issues_count > 0 && (
+                                <div className="text-[0.55rem] text-amber-500/60 font-mono mt-1">
+                                    {result.model_details.heuristic_issues_count} мәселе табылды
+                                </div>
+                            )}
                         </div>
                         <div className="glass rounded-xl p-4 border-l-2 border-purple-500/50 group hover:border-purple-400 transition-colors">
                             <div className="text-[0.65rem] text-slate-500 font-mono tracking-wider mb-1">СЕНІМДІЛІК</div>

@@ -12,3 +12,5 @@ beautifulsoup4==4.12.3
 langdetect==1.0.9
 Pillow==10.2.0
 requests==2.31.0
+torch>=2.0.0
+psycopg2-binary==2.9.9

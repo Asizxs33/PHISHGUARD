@@ -82,11 +82,12 @@ export default function Dashboard() {
             </div>
 
             {/* Action Cards — 3D hover */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {[
-                    { to: '/url', icon: '⬡', label: 'URL ТЕКСЕРУ', desc: 'Сілтемелерді нейрожелімен талдау', grad: 'from-blue-600 to-indigo-700', glow: 'shadow-blue-500/20', tag: '18 FEATURES' },
-                    { to: '/email', icon: '✉', label: 'EMAIL ТАЛДАУ', desc: 'Хат мазмұнын AI-мен сканерлеу', grad: 'from-purple-600 to-fuchsia-700', glow: 'shadow-purple-500/20', tag: '17 VECTORS' },
+                    { to: '/url', icon: '⬡', label: 'URL ТЕКСЕРУ', desc: 'Сілтемелерді нейрожелімен талдау', grad: 'from-blue-600 to-indigo-700', glow: 'shadow-blue-500/20', tag: '28 FEATURES' },
+                    { to: '/email', icon: '✉', label: 'EMAIL ТАЛДАУ', desc: 'Хат мазмұнын AI-мен сканерлеу', grad: 'from-purple-600 to-fuchsia-700', glow: 'shadow-purple-500/20', tag: '22 VECTORS' },
                     { to: '/qr', icon: '⬢', label: 'QR КОД', desc: 'QR кодты декодтап тексеру', grad: 'from-cyan-600 to-blue-700', glow: 'shadow-cyan-500/20', tag: 'QUISHING' },
+                    { to: '/chat', icon: '💬', label: 'КИБЕР КЕҢЕСШІ', desc: 'AI-дан қауіпсіздік бойынша кеңес алу', grad: 'from-emerald-600 to-teal-700', glow: 'shadow-emerald-500/20', tag: 'AI ADVISOR' },
                 ].map((a, i) => (
                     <Link key={a.to} to={a.to} className={`group block fade-up stagger-${i + 1}`}>
                         <div className={`relative rounded-2xl bg-gradient-to-br ${a.grad} p-6 overflow-hidden

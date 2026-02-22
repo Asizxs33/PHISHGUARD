@@ -6,6 +6,7 @@ const navItems = [
     { path: '/url', icon: '⬡', label: 'URL тексеру', tag: 'URL SCAN' },
     { path: '/email', icon: '✉', label: 'Email талдау', tag: 'EMAIL INTEL' },
     { path: '/qr', icon: '⬢', label: 'QR код', tag: 'QR DECODE' },
+    { path: '/chat', icon: '💬', label: 'Кибер кеңесші', tag: 'AI CHAT' },
     { path: '/history', icon: '◎', label: 'Тарих', tag: 'HISTORY' },
 ]
 
@@ -40,13 +41,13 @@ export default function Layout({ children }) {
                             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-500
                                 flex items-center justify-center text-white text-lg font-black
                                 shadow-lg shadow-indigo-500/30" style={{ animation: 'glowPulse 3s infinite' }}>
-                                PG
+                                CQ
                             </div>
                             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400
                                 border-2 border-[#08080f] animate-pulse" />
                         </div>
                         <div>
-                            <h1 className="text-base font-extrabold tracking-tight gradient-text">PHISHGUARD</h1>
+                            <h1 className="text-base font-extrabold tracking-tight gradient-text">CYBERQALQAN</h1>
                             <p className="text-[0.6rem] text-slate-500 font-mono tracking-[0.2em]">AI DEFENCE SYSTEM</p>
                         </div>
                     </div>

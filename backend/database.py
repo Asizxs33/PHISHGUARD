@@ -1,6 +1,7 @@
 """
 PhishGuard AI — Database Module
-SQLite database for storing analysis history.
+PostgreSQL (Neon) database for storing analysis history.
+Falls back to SQLite for local development if DATABASE_URL is not set.
 """
 
 import os
@@ -9,13 +10,29 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# On Render, filesystem is read-only except /tmp
-if os.environ.get('RENDER'):
-    DATABASE_URL = '/tmp/phishguard.db'
-else:
-    DATABASE_URL = os.path.join(os.path.dirname(__file__), 'phishguard.db')
+# ─── Database URL Configuration ─────────────────────────────────────────
+# Priority: DATABASE_URL env var (Neon PostgreSQL) → fallback to SQLite
 
-engine = create_engine(f'sqlite:///{DATABASE_URL}', connect_args={"check_same_thread": False})
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Neon/Render often provide postgres:// but SQLAlchemy needs postgresql://
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    
+    # Add sslmode for Neon (required)
+    if 'sslmode' not in DATABASE_URL:
+        separator = '&' if '?' in DATABASE_URL else '?'
+        DATABASE_URL = f'{DATABASE_URL}{separator}sslmode=require'
+    
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
+    print(f"✅ Connected to PostgreSQL (Neon)")
+else:
+    # Fallback: SQLite for local development
+    db_path = os.path.join(os.path.dirname(__file__), 'phishguard.db')
+    engine = create_engine(f'sqlite:///{db_path}', connect_args={"check_same_thread": False})
+    print(f"⚠️ Using SQLite (local): {db_path}")
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -46,6 +63,7 @@ class AnalysisHistory(Base):
 def init_db():
     """Create all tables."""
     Base.metadata.create_all(bind=engine)
+    print("✅ Database tables ready")
 
 
 def get_db():

@@ -40,4 +40,14 @@ export const getStats = async () => {
     return response.data
 }
 
+export const sendChatMessage = async (message) => {
+    const response = await api.post('/chat', { message })
+    return response.data
+}
+
+export const getChatSuggestions = async () => {
+    const response = await api.get('/chat/suggestions')
+    return response.data
+}
+
 export default api
