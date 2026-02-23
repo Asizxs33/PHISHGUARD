@@ -80,42 +80,54 @@ def start_health_server():
         logger.error(f"❌ Health server failed: {e}")
 
 
-# ─── API Helper ──────────────────────────────────────────────────────────
+# ─── API Helper & Client ─────────────────────────────────────────────────
+
+# Persistent client for efficient connection pooling
+_api_client: Optional[httpx.AsyncClient] = None
+
+async def get_api_client() -> httpx.AsyncClient:
+    global _api_client
+    if _api_client is None or _api_client.is_closed:
+        _api_client = httpx.AsyncClient(
+            timeout=60.0,
+            headers={"User-Agent": "CyberQalqanBot/2.0 (Bot Security Analysis)"}
+        )
+    return _api_client
 
 async def api_request(method: str, endpoint: str, **kwargs) -> dict:
     """Make an async request to the CyberQalqan API backend with retries."""
     url = f"{API_URL}{endpoint}"
     max_retries = 3
-    retry_delay = 2  # seconds
+    retry_delay = 3  # Start with 3 seconds
+
+    client = await get_api_client()
 
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                if method == "GET":
-                    resp = await client.get(url, params=kwargs.get("params"))
-                elif method == "POST":
-                    if "files" in kwargs:
-                        resp = await client.post(url, files=kwargs["files"])
-                    else:
-                        resp = await client.post(url, json=kwargs.get("json"))
+            if method == "GET":
+                resp = await client.get(url, params=kwargs.get("params"))
+            elif method == "POST":
+                if "files" in kwargs:
+                    resp = await client.post(url, files=kwargs["files"])
                 else:
-                    return None
+                    resp = await client.post(url, json=kwargs.get("json"))
+            else:
+                return None
 
-                if resp.status_code == 200:
-                    return resp.json()
-                elif resp.status_code in [429, 500, 502, 503, 504]:
-                    logger.warning(f"⚠️ API returned {resp.status_code}, retrying ({attempt+1}/{max_retries})...")
-                    import asyncio
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                    continue
-                else:
-                    logger.error(f"❌ API error {resp.status_code}: {resp.text[:200]}")
-                    return None
+            if resp.status_code == 200:
+                return resp.json()
+            elif resp.status_code in [429, 500, 502, 503, 504]:
+                logger.warning(f"⚠️ API returned {resp.status_code}, retrying ({attempt+1}/{max_retries}) in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+                continue
+            else:
+                logger.error(f"❌ API error {resp.status_code}: {resp.text[:200]}")
+                return None
 
         except (httpx.TimeoutException, httpx.ConnectError) as e:
             logger.warning(f"⚠️ Connection error ({e}), retrying ({attempt+1}/{max_retries})...")
-            import asyncio
-            await asyncio.sleep(retry_delay * (attempt + 1))
+            await asyncio.sleep(2)
         except Exception as e:
             logger.error(f"❌ API exception: {e}")
             return None
@@ -650,6 +662,7 @@ def main():
     app.run_polling(
         drop_pending_updates=True, 
         allowed_updates=Update.ALL_TYPES,
+        poll_interval=2.0,  # Slower polling for Render stability
         close_loop=False
     )
 
