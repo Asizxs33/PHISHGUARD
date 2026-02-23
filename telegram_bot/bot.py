@@ -49,7 +49,7 @@ PORT = int(os.getenv("PORT", 8080))
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.DEBUG
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
@@ -83,32 +83,44 @@ def start_health_server():
 # ─── API Helper ──────────────────────────────────────────────────────────
 
 async def api_request(method: str, endpoint: str, **kwargs) -> dict:
-    """Make an async request to the CyberQalqan API backend."""
+    """Make an async request to the CyberQalqan API backend with retries."""
     url = f"{API_URL}{endpoint}"
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            if method == "GET":
-                resp = await client.get(url, params=kwargs.get("params"))
-            elif method == "POST":
-                if "files" in kwargs:
-                    resp = await client.post(url, files=kwargs["files"])
+    max_retries = 3
+    retry_delay = 2  # seconds
+
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                if method == "GET":
+                    resp = await client.get(url, params=kwargs.get("params"))
+                elif method == "POST":
+                    if "files" in kwargs:
+                        resp = await client.post(url, files=kwargs["files"])
+                    else:
+                        resp = await client.post(url, json=kwargs.get("json"))
                 else:
-                    resp = await client.post(url, json=kwargs.get("json"))
-            else:
-                return None
+                    return None
 
-            if resp.status_code == 200:
-                return resp.json()
-            else:
-                logger.error(f"API error {resp.status_code}: {resp.text[:300]}")
-                return None
+                if resp.status_code == 200:
+                    return resp.json()
+                elif resp.status_code in [429, 500, 502, 503, 504]:
+                    logger.warning(f"⚠️ API returned {resp.status_code}, retrying ({attempt+1}/{max_retries})...")
+                    import asyncio
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                    continue
+                else:
+                    logger.error(f"❌ API error {resp.status_code}: {resp.text[:200]}")
+                    return None
 
-    except httpx.TimeoutException:
-        logger.error(f"API timeout: {endpoint}")
-        return None
-    except Exception as e:
-        logger.error(f"API exception: {e}")
-        return None
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            logger.warning(f"⚠️ Connection error ({e}), retrying ({attempt+1}/{max_retries})...")
+            import asyncio
+            await asyncio.sleep(retry_delay * (attempt + 1))
+        except Exception as e:
+            logger.error(f"❌ API exception: {e}")
+            return None
+    
+    return None
 
 
 # ─── Emoji & Formatting Helpers ──────────────────────────────────────────
