@@ -64,6 +64,10 @@ BRAND_DOMAINS = {
     'ozon': ['ozon.ru'],
     'wildberries': ['wildberries.ru', 'wb.ru'],
     'avito': ['avito.ru'],
+    'canva': ['canva.com'],
+    'figma': ['figma.com'],
+    'trello': ['trello.com'],
+    'notion': ['notion.so', 'notion.site'],
 }
 
 # ─── Suspicious TLD list (expanded) ─────────────────────────────────────
@@ -262,7 +266,9 @@ def check_url_patterns(url: str, domain: str, parsed) -> List[Dict[str, Any]]:
         })
 
     # 2. Extremely long URL (common in phishing to hide real destination)
-    if len(url) > 150:
+    # Skip length check for trusted large platforms
+    trusted_long_platforms = ['canva.com', 'figma.com', 'google.com', 'microsoft.com', 'sharepoint.com']
+    if len(url) > 150 and not any(p in domain_lower for p in trusted_long_platforms):
         issues.append({
             'type': 'very_long_url',
             'severity': 0.4,

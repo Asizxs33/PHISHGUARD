@@ -8,11 +8,17 @@ Deployed as a Web Service on Render (free tier) with a health endpoint.
 
 import os
 import io
+import sys
+import asyncio
 import logging
 import threading
 import httpx
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
+
+# FIX: Windows ProactorEventLoop doesn't work properly with python-telegram-bot
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from telegram import (
     Update,
@@ -31,6 +37,7 @@ from telegram.ext import (
     ContextTypes,
 )
 from telegram.constants import ParseMode, ChatAction
+from telegram.request import HTTPXRequest
 
 # ─── Config ──────────────────────────────────────────────────────────────
 
@@ -42,7 +49,7 @@ PORT = int(os.getenv("PORT", 8080))
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    level=logging.DEBUG
 )
 logger = logging.getLogger(__name__)
 
@@ -65,9 +72,12 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 def start_health_server():
     """Start a simple HTTP server for Render health checks."""
-    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
-    logger.info(f"🌐 Health server on port {PORT}")
-    server.serve_forever()
+    try:
+        server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
+        logger.info(f"🌐 Health server started on port {PORT}")
+        server.serve_forever()
+    except Exception as e:
+        logger.error(f"❌ Health server failed: {e}")
 
 
 # ─── API Helper ──────────────────────────────────────────────────────────
@@ -555,16 +565,27 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Main ────────────────────────────────────────────────────────────────
 
-def main():
+async def start_bot():
+    """Async main function to run the bot."""
     if not BOT_TOKEN:
-        print("❌ BOT_TOKEN is not set! Check your .env file.")
+        logger.error("❌ BOT_TOKEN is not set! Check your .env file.")
         return
 
-    # Start health check server in background thread (for Render)
-    health_thread = threading.Thread(target=start_health_server, daemon=True)
-    health_thread.start()
+    # Only start health server if on Render or explicitly requested
+    if os.getenv("RENDER") == "true" or PORT != 8080:
+        health_thread = threading.Thread(target=start_health_server, daemon=True)
+        health_thread.start()
+    else:
+        logger.info("ℹ️ Local run: skipping health server")
 
+    logger.info("🔨 Building application...")
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # Register handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("stats", stats_command))
+    app.add_handler(CommandHandler("history", history_command))
 
     # Conversation handlers
     url_conv = ConversationHandler(
@@ -575,6 +596,7 @@ def main():
         states={WAITING_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_url)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
+    app.add_handler(url_conv)
 
     email_conv = ConversationHandler(
         entry_points=[
@@ -588,6 +610,7 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
+    app.add_handler(email_conv)
 
     qr_conv = ConversationHandler(
         entry_points=[
@@ -597,15 +620,6 @@ def main():
         states={WAITING_QR: [MessageHandler(filters.PHOTO | filters.Document.IMAGE, receive_qr_photo)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-
-    # Register handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("stats", stats_command))
-    app.add_handler(CommandHandler("history", history_command))
-
-    app.add_handler(url_conv)
-    app.add_handler(email_conv)
     app.add_handler(qr_conv)
 
     app.add_handler(CallbackQueryHandler(inline_button_handler))
@@ -617,11 +631,34 @@ def main():
 
     app.add_error_handler(error_handler)
 
-    print("🛡️ CyberQalqan AI Telegram Bot is running...")
-    print(f"📡 API: {API_URL}")
-    print(f"🌐 Health check: http://0.0.0.0:{PORT}")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("⚙️ Initializing application...")
+    await app.initialize()
+    
+    logger.info("📡 Checking connection to Telegram...")
+    bot_info = await app.bot.get_me()
+    logger.info(f"✅ Connected! Bot: @{bot_info.username}")
 
+    logger.info("🚀 Starting polling...")
+    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    await app.start()
+
+    logger.info("🛡️ CyberQalqan AI is active and listening.")
+    
+    # Keep the bot running
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("🛑 Shutting down...")
+        await app.stop()
+        await app.updater.stop()
+        await app.shutdown()
+
+def main():
+    try:
+        asyncio.run(start_bot())
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == "__main__":
     main()
