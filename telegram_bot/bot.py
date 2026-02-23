@@ -565,23 +565,22 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Main ────────────────────────────────────────────────────────────────
 
-async def start_bot():
-    """Async main function to run the bot."""
+def main():
     if not BOT_TOKEN:
-        logger.error("❌ BOT_TOKEN is not set! Check your .env file.")
+        logger.error("❌ BOT_TOKEN IS MISSING!")
+        logger.error("Please set it in Render Dashboard -> Environment Variables")
         return
 
-    # Only start health server if on Render or explicitly requested
-    if os.getenv("RENDER") == "true" or PORT != 8080:
-        health_thread = threading.Thread(target=start_health_server, daemon=True)
-        health_thread.start()
-    else:
-        logger.info("ℹ️ Local run: skipping health server")
+    # 1. Start health check server in background thread (immediately!)
+    # This is critical for Render to keep the service alive
+    health_thread = threading.Thread(target=start_health_server, daemon=True)
+    health_thread.start()
 
+    # 2. Build application
     logger.info("🔨 Building application...")
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # Register handlers
+    # 3. Register handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("stats", stats_command))
@@ -631,34 +630,16 @@ async def start_bot():
 
     app.add_error_handler(error_handler)
 
-    logger.info("⚙️ Initializing application...")
-    await app.initialize()
+    # 4. Start the bot!
+    logger.info("🛡️ CyberQalqan AI Telegram Bot is starting...")
+    logger.info(f"📡 API: {API_URL}")
     
-    logger.info("📡 Checking connection to Telegram...")
-    bot_info = await app.bot.get_me()
-    logger.info(f"✅ Connected! Bot: @{bot_info.username}")
-
-    logger.info("🚀 Starting polling...")
-    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-    await app.start()
-
-    logger.info("🛡️ CyberQalqan AI is active and listening.")
-    
-    # Keep the bot running
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("🛑 Shutting down...")
-        await app.stop()
-        await app.updater.stop()
-        await app.shutdown()
-
-def main():
-    try:
-        asyncio.run(start_bot())
-    except KeyboardInterrupt:
-        pass
+    # run_polling is safer for production on most servers
+    app.run_polling(
+        drop_pending_updates=True, 
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False
+    )
 
 if __name__ == "__main__":
     main()
