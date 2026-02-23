@@ -386,6 +386,7 @@ def generate_url_dataset(n_samples: int = 8000) -> pd.DataFrame:
         elif pattern_type == 4:
             url = f"http://www.{brand}.com@{rand}.tk/login"
         elif pattern_type == 5:
+            tld = random.choice(['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top'])
             url = f"http://{rand}{tld}/free-prize/winner/claim"
         else:
             url = f"http://{brand}-secure.{rand}.ml/password-reset"
@@ -443,7 +444,7 @@ def train_url_model():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
     classifier = PhishingClassifier()
-    metrics = classifier.train(X_train, y_train, feature_names, epochs=200, batch_size=64, lr=0.001)
+    metrics = classifier.train(X_train, y_train, feature_names, epochs=100, batch_size=64, lr=0.001)
 
     # ── Evaluate on test set ──
     print(f"\n{'─' * 50}")
@@ -489,7 +490,7 @@ def train_email_model():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
     classifier = PhishingClassifier()
-    metrics = classifier.train(X_train, y_train, feature_names, epochs=200, batch_size=64, lr=0.001)
+    metrics = classifier.train(X_train, y_train, feature_names, epochs=100, batch_size=64, lr=0.001)
 
     # ── Evaluate on test set ──
     print(f"\n{'─' * 50}")
