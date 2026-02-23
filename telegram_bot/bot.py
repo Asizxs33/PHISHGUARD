@@ -66,9 +66,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"status":"ok","service":"CyberQalqan Telegram Bot"}')
-
-    def log_message(self, format, *args):
-        pass  # Suppress logs
+        logger.info("📡 Health check received: Kept alive by pinger")
 
 
 def start_health_server():
