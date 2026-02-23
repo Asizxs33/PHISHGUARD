@@ -2,9 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (gcc for builds, libzbar0 for pyzbar, libgl1/libglib for opencv)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libzbar0 \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better Docker cache
