@@ -77,6 +77,15 @@ function handleAnalysisResult(data, tabId, url) {
             // Content script might not be injected yet or page is still loading
             console.log("Could not send message to content script:", err);
         });
+
+        // Show a system-level popup notification
+        chrome.notifications.create({
+            type: "basic",
+            iconUrl: "icons/icon128.png", // Fallback to default if icon doesn't exist, Chrome handles it
+            title: "Угроза безопасности!",
+            message: `Сайт ${new URL(url).hostname} был заблокирован CyberQalqan AI как фишинговый.`,
+            priority: 2
+        });
     } else {
         // Green badge for safe
         chrome.action.setBadgeText({ text: '✓', tabId: tabId });

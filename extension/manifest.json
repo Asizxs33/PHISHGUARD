@@ -8,7 +8,8 @@
         "storage",
         "scripting",
         "tabs",
-        "declarativeContent"
+        "declarativeContent",
+        "notifications"
     ],
     "host_permissions": [
         "<all_urls>"
