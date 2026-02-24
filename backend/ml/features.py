@@ -15,6 +15,13 @@ HIGH_RISK_PREFIXES_LIST = ['+234', '+91', '+44', '+371', '+372', '+380']
 TOLL_FREE_PREFIXES = ['+7800', '+7495', '+7499']
 CIS_PREFIXES = ['+7', '+996', '+998']
 
+# --- Trusted Platforms ---
+TRUSTED_PLATFORMS = [
+    'netlify.app', 'netlify.com', 'vercel.app', 'herokuapp.com', 
+    'github.io', 'pages.dev', 'onrender.com', 'pythonanywhere.com',
+    'firebaseapp.com', 'web.app'
+]
+
 # Suspicious keywords commonly found in phishing URLs
 SUSPICIOUS_URL_KEYWORDS = [
     'login', 'signin', 'sign-in', 'log-in', 'verify', 'account', 'update',
@@ -144,6 +151,18 @@ def extract_url_features(url: str) -> Dict[str, Any]:
 
     domain_name = domain_no_www.split('.')[0] if '.' in domain_no_www else domain_no_www
 
+    # Extract base domain correctly to avoid treating subdomains like "app" as the domain name
+    parts = domain_no_www.split('.')
+    if len(parts) > 2:
+        if len(parts[-1]) == 2 and parts[-2] in ['co', 'com', 'org', 'net', 'gov', 'edu', 'ac', 'mil']:
+            base_domain = '.'.join(parts[-3:])
+        else:
+            base_domain = '.'.join(parts[-2:])
+    else:
+        base_domain = domain_no_www
+        
+    base_domain_name = base_domain.split('.')[0]
+
     # ── Original features (1-18) ──
 
     # 1. URL length
@@ -211,19 +230,24 @@ def extract_url_features(url: str) -> Dict[str, Any]:
 
     # 19. Brand similarity distance (typosquatting detection)
     # Low distance = very similar to known brand = suspicious
-    min_dist = _min_brand_distance(domain_name)
-    features['brand_similarity'] = 1.0 / (1.0 + min_dist)  # 1.0 = exact match, ~0 = very different
-    # A distance of 1-2 is highly suspicious (typosquatting)
-    features['brand_typosquat'] = 1 if (0 < min_dist <= 2 and len(domain_name) >= 4) else 0
+    if base_domain in TRUSTED_PLATFORMS:
+        features['brand_similarity'] = 0.0
+        features['brand_typosquat'] = 0
+        features['brand_in_domain'] = 0
+    else:
+        min_dist = _min_brand_distance(base_domain_name)
+        features['brand_similarity'] = 1.0 / (1.0 + min_dist)  # 1.0 = exact match, ~0 = very different
+        # A distance of 1-2 is highly suspicious (typosquatting)
+        features['brand_typosquat'] = 1 if (0 < min_dist <= 2 and len(base_domain_name) >= 4) else 0
 
-    # 20. Brand name in non-official domain
-    features['brand_in_domain'] = _brand_name_in_domain(domain_clean)
+        # 20. Brand name in non-official domain
+        features['brand_in_domain'] = _brand_name_in_domain(domain_clean)
 
     # 21. Punycode detection (IDN homograph attack)
     features['has_punycode'] = 1 if 'xn--' in domain_lower else 0
 
     # 22. Domain entropy (randomness of domain name = might be auto-generated)
-    features['domain_entropy'] = _calculate_entropy(domain_name)
+    features['domain_entropy'] = _calculate_entropy(base_domain_name)
 
     # 23. Path suspiciousness score
     phishing_paths = ['login', 'signin', 'verify', 'confirm', 'update', 'secure',
@@ -246,8 +270,8 @@ def extract_url_features(url: str) -> Dict[str, Any]:
 
     # 27. Consonant ratio in domain (random generated domains have unusual consonant ratios)
     vowels = set('aeiou')
-    consonants = sum(1 for c in domain_name if c.isalpha() and c.lower() not in vowels)
-    total_alpha = sum(1 for c in domain_name if c.isalpha())
+    consonants = sum(1 for c in base_domain_name if c.isalpha() and c.lower() not in vowels)
+    total_alpha = sum(1 for c in base_domain_name if c.isalpha())
     features['consonant_ratio'] = consonants / max(total_alpha, 1)
 
     # 28. Token count in domain (split by hyphens and dots — many tokens = suspicious)

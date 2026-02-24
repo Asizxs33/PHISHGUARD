@@ -13,6 +13,14 @@ from urllib.parse import urlparse, parse_qs, unquote
 from typing import Dict, Any, List, Tuple
 
 
+# ─── Trusted Hosting Platforms ────────────────────────────────────────────
+# Avoid flagging these as typosquatting or brand impersonation
+TRUSTED_PLATFORMS = [
+    'netlify.app', 'netlify.com', 'vercel.app', 'herokuapp.com', 
+    'github.io', 'pages.dev', 'onrender.com', 'pythonanywhere.com',
+    'firebaseapp.com', 'web.app'
+]
+
 # ─── Known Legitimate Brand Domains ─────────────────────────────────────
 # Maps brand names to their REAL official domains
 
@@ -172,6 +180,9 @@ def check_brand_impersonation(url: str, domain: str) -> List[Dict[str, Any]]:
     base_domain = _extract_base_domain(domain_lower)
     url_lower = url.lower()
 
+    if base_domain in TRUSTED_PLATFORMS:
+        return []
+
     for brand, official_domains in BRAND_DOMAINS.items():
         # Skip if the domain IS the official domain
         if base_domain in official_domains or domain_lower in official_domains:
@@ -223,6 +234,9 @@ def check_typosquatting(domain: str) -> List[Dict[str, Any]]:
     domain_lower = _normalize_domain(domain)
     base_domain = _extract_base_domain(domain_lower)
     domain_name = base_domain.split('.')[0]  # Just the domain name without TLD
+
+    if base_domain in TRUSTED_PLATFORMS:
+        return []
 
     for brand, official_domains in BRAND_DOMAINS.items():
         if base_domain in official_domains:
