@@ -60,6 +60,7 @@ def analyze_phone(phone: str) -> Tuple[float, str, Dict[str, Any]]:
         
     score = 0.1
     issues = []
+    details = {}
     
     # 1. Check length
     if len(digits) < 10 or len(digits) > 15:
