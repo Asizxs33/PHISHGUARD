@@ -7,6 +7,7 @@ const navItems = [
     { path: '/email', icon: '✉', label: 'Email талдау', tag: 'EMAIL INTEL' },
     { path: '/qr', icon: '⬢', label: 'QR код', tag: 'QR DECODE' },
     { path: '/chat', icon: '💬', label: 'Кибер кеңесші', tag: 'AI CHAT' },
+    { path: '/training', icon: '🎯', label: 'Тренажер', tag: 'CYBER GAME' },
     { path: '/history', icon: '◎', label: 'Тарих', tag: 'HISTORY' },
 ]
 

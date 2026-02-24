@@ -6,6 +6,7 @@ import EmailAnalyzer from './pages/EmailAnalyzer'
 import QrScanner from './pages/QrScanner'
 import History from './pages/History'
 import CyberChat from './pages/CyberChat'
+import CyberTraining from './pages/CyberTraining'
 import Landing from './pages/Landing'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
         <Route path="/qr" element={<Layout><QrScanner /></Layout>} />
         <Route path="/history" element={<Layout><History /></Layout>} />
         <Route path="/chat" element={<Layout><CyberChat /></Layout>} />
+        <Route path="/training" element={<Layout><CyberTraining /></Layout>} />
       </Routes>
     </Router>
   )
