@@ -5,7 +5,7 @@ import { analyzePhone } from '../api'
 function PhoneResultCard({ result }) {
     if (!result) return null
 
-    const { verdict, risk_score, details } = result
+    const { verdict, score, details } = result
 
     // UI mapping for verdicts
     const verdictConfig = {
@@ -39,7 +39,7 @@ function PhoneResultCard({ result }) {
     }
 
     const config = verdictConfig[verdict] || verdictConfig['suspicious']
-    const pct = Math.round((risk_score || 0) * 100)
+    const pct = verdict === 'phishing' ? 100 : Math.round((score || 0) * 100)
 
     return (
         <div className={`mt-6 rounded-3xl ${config.bg} ${config.border} border p-8 fade-up transform transition-all duration-500 hover:scale-[1.01]`}>
