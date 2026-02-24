@@ -34,7 +34,7 @@ async function analyzeUrl(url, tabId) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ url: url })
+            body: JSON.stringify({ url: url, skip_db: true })
         });
 
         if (!response.ok) {
@@ -61,7 +61,9 @@ async function analyzeUrl(url, tabId) {
 
 // Process the result and notify the content script if it's phishing
 function handleAnalysisResult(data, tabId, url) {
-    if (data.is_phishing) {
+    const isDangerous = data.verdict === 'phishing' || data.verdict === 'suspicious' || data.score >= 0.5;
+
+    if (isDangerous) {
         // Red badge for danger
         chrome.action.setBadgeText({ text: '!', tabId: tabId });
         chrome.action.setBadgeBackgroundColor({ color: '#ff4d4f', tabId: tabId });

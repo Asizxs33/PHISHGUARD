@@ -49,9 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
             statusDesc.textContent = getDomain(url);
         }
 
-        if (data && data.confidence !== undefined) {
+        if (data && data.score !== undefined) {
             confidenceRow.style.display = 'flex';
-            const confPercent = (data.confidence * 100).toFixed(1);
+            const confPercent = (data.score * 100).toFixed(1);
             confidenceValue.textContent = `${confPercent}%`;
             confidenceValue.style.color = state === 'danger' ? '#ef4444' : '#10b981';
         }
@@ -77,14 +77,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${config.API_URL}/api/analyze-url`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: tab.url })
+                body: JSON.stringify({ url: tab.url, skip_db: true })
             });
 
             if (!response.ok) throw new Error('API Error');
 
             const data = await response.json();
 
-            updateUI(data.is_phishing ? 'danger' : 'safe', data, tab.url);
+            const isDangerous = data.verdict === 'phishing' || data.verdict === 'suspicious' || data.score >= 0.5;
+            updateUI(isDangerous ? 'danger' : 'safe', data, tab.url);
 
         } catch (error) {
             console.error(error);

@@ -1,26 +1,26 @@
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "show_warning") {
-        injectWarningScreen(request.data, request.url);
-    }
+  if (request.action === "show_warning") {
+    injectWarningScreen(request.data, request.url);
+  }
 });
 
 function injectWarningScreen(data, url) {
-    // Prevent duplicate overlays
-    if (document.getElementById('cq-phishguard-overlay')) {
-        return;
-    }
+  // Prevent duplicate overlays
+  if (document.getElementById('cq-phishguard-overlay')) {
+    return;
+  }
 
-    // Create the overlay container
-    const overlay = document.createElement('div');
-    overlay.id = 'cq-phishguard-overlay';
+  // Create the overlay container
+  const overlay = document.createElement('div');
+  overlay.id = 'cq-phishguard-overlay';
 
-    // Format the reasons array to an HTML list
-    const reasonsHtml = data.reasons
-        ? data.reasons.map(r => `<li>${r}</li>`).join('')
-        : '<li>High risk features detected by ML engine</li>';
+  // Format the reasons array to an HTML list
+  const reasonsHtml = data.detailed_analysis && data.detailed_analysis.length > 0
+    ? data.detailed_analysis.map(r => `<li>${r.ru || r.kz || r.en}</li>`).join('')
+    : '<li>High risk features detected by ML engine</li>';
 
-    overlay.innerHTML = `
+  overlay.innerHTML = `
     <div class="cq-container">
       <div class="cq-header">
         <div class="cq-icon">⚠️</div>
@@ -31,7 +31,7 @@ function injectWarningScreen(data, url) {
         
         <div class="cq-details">
           <h3>CyberQalqan AI Анализ:</h3>
-          <p class="cq-confidence">Уверенность сети: <span>${(data.confidence * 100).toFixed(1)}%</span></p>
+          <p class="cq-confidence">Уверенность сети: <span>${(data.score * 100).toFixed(1)}%</span></p>
           <ul class="cq-reasons">
             ${reasonsHtml}
           </ul>
@@ -46,19 +46,19 @@ function injectWarningScreen(data, url) {
     </div>
   `;
 
-    // Append to body
-    document.body.appendChild(overlay);
+  // Append to body
+  document.body.appendChild(overlay);
 
-    // Attempt to stop the rest of the page from executing/loading by covering it fully
-    document.body.style.overflow = 'hidden';
+  // Attempt to stop the rest of the page from executing/loading by covering it fully
+  document.body.style.overflow = 'hidden';
 
-    // Add event listeners for buttons
-    document.getElementById('cq-btn-leave').addEventListener('click', () => {
-        window.location.href = "about:blank"; // Or navigate back
-    });
+  // Add event listeners for buttons
+  document.getElementById('cq-btn-leave').addEventListener('click', () => {
+    window.location.href = "about:blank"; // Or navigate back
+  });
 
-    document.getElementById('cq-btn-proceed').addEventListener('click', () => {
-        overlay.remove();
-        document.body.style.overflow = '';
-    });
+  document.getElementById('cq-btn-proceed').addEventListener('click', () => {
+    overlay.remove();
+    document.body.style.overflow = '';
+  });
 }
