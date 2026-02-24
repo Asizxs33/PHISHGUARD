@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import UrlAnalyzer from './pages/UrlAnalyzer'
 import EmailAnalyzer from './pages/EmailAnalyzer'
 import QrScanner from './pages/QrScanner'
+import PhoneAnalyzer from './pages/PhoneAnalyzer'
 import History from './pages/History'
 import CyberChat from './pages/CyberChat'
 import CyberTraining from './pages/CyberTraining'
@@ -17,6 +18,7 @@ function App() {
         <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
         <Route path="/url" element={<Layout><UrlAnalyzer /></Layout>} />
         <Route path="/email" element={<Layout><EmailAnalyzer /></Layout>} />
+        <Route path="/phone" element={<Layout><PhoneAnalyzer /></Layout>} />
         <Route path="/qr" element={<Layout><QrScanner /></Layout>} />
         <Route path="/history" element={<Layout><History /></Layout>} />
         <Route path="/chat" element={<Layout><CyberChat /></Layout>} />

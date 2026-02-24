@@ -55,7 +55,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Conversation states
-WAITING_URL, WAITING_EMAIL_SUBJECT, WAITING_EMAIL_BODY, WAITING_EMAIL_SENDER, WAITING_QR = range(5)
+WAITING_URL, WAITING_EMAIL_SUBJECT, WAITING_EMAIL_BODY, WAITING_EMAIL_SENDER, WAITING_QR, WAITING_PHONE = range(6)
 
 
 # ─── Health Check HTTP Server (keeps Render happy) ───────────────────────
@@ -228,8 +228,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Welcome message with main menu."""
     keyboard = [
         [KeyboardButton("🔗 URL тексеру"), KeyboardButton("📧 Email тексеру")],
-        [KeyboardButton("📷 QR код тексеру"), KeyboardButton("💬 AI Кеңесші")],
-        [KeyboardButton("📊 Статистика"), KeyboardButton("📜 Тарих")],
+        [KeyboardButton("📷 QR код тексеру"), KeyboardButton("📱 Нөмірді тексеру")],
+        [KeyboardButton("💬 AI Кеңесші"), KeyboardButton("📊 Статистика"), KeyboardButton("📜 Тарих")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -240,6 +240,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔗 *URL тексеру* — сілтемені фишингке тексеру\n"
         "📧 *Email тексеру* — хат мазмұнын талдау\n"
         "📷 *QR код тексеру* — QR-кодтағы сілтемені тексеру\n"
+        "📱 *Нөмірді тексеру* — телефон нөмірін алаяқтарға тексеру\n"
         "💬 *AI Кеңесші* — кибер қауіпсіздік бойынша кеңес\n"
         "📊 *Статистика* — жалпы талдау статистикасы\n"
         "📜 *Тарих* — соңғы тексерулер\n\n"
@@ -260,6 +261,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "  /url — URL сілтемесін тексеру\n"
         "  /email — Email хатты тексеру\n"
         "  /qr — QR-кодты тексеру (фото жіберіңіз)\n"
+        "  /phone — Телефон нөмірін тексеру\n"
         "  /stats — Статистика\n"
         "  /history — Тексерулер тарихы\n"
         "  /help — Көмек\n\n"
@@ -498,6 +500,57 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Тарихты жүктеу мүмкін болмады.")
 
 
+# ─── Phone Analysis ──────────────────────────────────────────────────────
+
+async def phone_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start phone analysis flow."""
+    if context.args:
+        phone = " ".join(context.args)
+        await _analyze_phone(update, context, phone)
+        return ConversationHandler.END
+
+    await update.message.reply_text(
+        "📱 *Телефон нөмірін тексеру*\n\n"
+        "Тексергіңіз келетін нөмірді жіберіңіз:\n"
+        "Мысалы: +7 701 000 0000 немесе 87010000000\n\n"
+        "Бас тарту: /cancel",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    return WAITING_PHONE
+
+
+async def receive_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Receive phone number and analyze."""
+    phone = update.message.text.strip()
+    await _analyze_phone(update, context, phone)
+    return ConversationHandler.END
+
+
+async def _analyze_phone(update: Update, context: ContextTypes.DEFAULT_TYPE, phone: str):
+    """Perform phone analysis."""
+    await update.message.chat.send_action(ChatAction.TYPING)
+
+    safe_phone = escape_md(phone[:30])
+    msg = await update.message.reply_text(
+        f"🔍 Тексерілуде...\n{safe_phone}\n\n⏳ Күте тұрыңыз..."
+    )
+
+    result = await api_request("POST", "/api/analyze-phone", json={"phone": phone})
+
+    if result:
+        safe_display = escape_md(phone[:30])
+        text = f"📱 *Нөмір:* {safe_display}\n\n" + format_analysis_result(result, "Phone")
+        try:
+            await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            await msg.edit_text(text.replace("*", ""))
+    else:
+        await msg.edit_text(
+            "❌ Қате! Серверге қосылу мүмкін болмады.\n"
+            "Сервер ояту үшін 1-2 минут күтіңіз және қайталаңыз."
+        )
+
+
 # ─── AI Chat ─────────────────────────────────────────────────────────────
 
 async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -507,6 +560,14 @@ async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Auto-detect URLs
     if text.startswith(("http://", "https://", "www.")):
         await _analyze_url(update, context, text)
+        return
+
+    # Auto-detect phone numbers
+    import re
+    digits = re.sub(r'\D', '', text)
+    is_mostly_digits = len(text) > 0 and (sum(c.isdigit() for c in text) / len(text)) > 0.5
+    if (text.startswith('+') and len(digits) >= 10) or (len(digits) >= 10 and len(digits) <= 15 and is_mostly_digits):
+        await _analyze_phone(update, context, text)
         return
 
     await update.message.chat.send_action(ChatAction.TYPING)
@@ -643,6 +704,16 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(qr_conv)
+
+    phone_conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("phone", phone_command),
+            MessageHandler(filters.Regex("^📱 Нөмірді тексеру$"), phone_command),
+        ],
+        states={WAITING_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_phone)]},
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(phone_conv)
 
     app.add_handler(CallbackQueryHandler(inline_button_handler))
     app.add_handler(MessageHandler(filters.Regex("^📊 Статистика$"), stats_command))

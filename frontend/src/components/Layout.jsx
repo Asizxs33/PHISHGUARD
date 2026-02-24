@@ -5,6 +5,7 @@ const navItems = [
     { path: '/dashboard', icon: '◈', label: 'Басқару орталығы', tag: 'DASHBOARD' },
     { path: '/url', icon: '⬡', label: 'URL тексеру', tag: 'URL SCAN' },
     { path: '/email', icon: '✉', label: 'Email талдау', tag: 'EMAIL INTEL' },
+    { path: '/phone', icon: '📱', label: 'Телефон тексеру', tag: 'PHONE SCAN' },
     { path: '/qr', icon: '⬢', label: 'QR код', tag: 'QR DECODE' },
     { path: '/chat', icon: '💬', label: 'Кибер кеңесші', tag: 'AI CHAT' },
     { path: '/training', icon: '🎯', label: 'Тренажер', tag: 'CYBER GAME' },

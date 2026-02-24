@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from ml.features import extract_url_features, extract_email_features, get_url_feature_names, get_email_feature_names
 from ml.classifier import PhishingClassifier
 from ml.heuristic_analyzer import analyze_url_heuristic, combine_scores
+from ml.phone_analyzer import analyze_phone as do_analyze_phone
 from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS
 from database import init_db, get_db, save_analysis, get_history, get_stats
 
@@ -58,11 +59,16 @@ def startup():
 
 class UrlRequest(BaseModel):
     url: str = Field(..., min_length=3, description="URL to analyze")
+    skip_db: bool = Field(default=False, description="Do not save this request to history")
 
 class EmailRequest(BaseModel):
     subject: str = Field(default="", description="Email subject")
     body: str = Field(..., min_length=1, description="Email body text")
     sender: str = Field(default="", description="Sender email address")
+
+class PhoneRequest(BaseModel):
+    phone: str = Field(..., min_length=5, description="Phone number to analyze")
+    skip_db: bool = Field(default=False, description="Do not save this request to history")
 
 class AnalysisResponse(BaseModel):
     score: float
@@ -247,6 +253,35 @@ def generate_detailed_analysis(features: dict, analysis_type: str, heuristic_iss
                 "en": "The email talks about money or payments. Be careful, this could be a financial scam."
             })
 
+    elif analysis_type == 'phone':
+        if heuristic_issues:
+            for issue in heuristic_issues:
+                issue_type = issue.get('type', '')
+                if issue_type == 'invalid_length':
+                    details.append({
+                        "kz": "⚠️ Бұл нөмірдің ұзындығы қалыпсыз.",
+                        "ru": "⚠️ У этого номера необычная длина.",
+                        "en": "⚠️ This phone number has an unusual length."
+                    })
+                elif issue_type == 'high_risk_country':
+                    details.append({
+                        "kz": "🚫 Бұл нөмір алаяқтар жиі қолданатын шет елдік кодпен басталған.",
+                        "ru": "🚫 Номер начинается с кода страны, который часто используют мошенники.",
+                        "en": "🚫 Number starts with a country code frequently used by scammers."
+                    })
+                elif issue_type == 'foreign_number':
+                    details.append({
+                        "kz": "⚠️ Бұл шетелдік нөмір. Егер күдікті болса, жауап бермеңіз.",
+                        "ru": "⚠️ Это иностранный номер. Будьте осторожны, если звонящий представляется местным.",
+                        "en": "⚠️ This is a foreign number. Be cautious if they claim to be local."
+                    })
+                elif issue_type == 'spoofed_bank_number':
+                    details.append({
+                        "kz": "🚫 Банктер әдетте 8-800 немесе 8-495 нөмірлерінен қоңырау шалмайды. Бұл жалған нөмір болуы мүмкін.",
+                        "ru": "🚫 Банки обычно не звонят клиентам с номеров 8-800 или 8-495. Это может быть подмена номера.",
+                        "en": "🚫 Banks typically do not make outgoing calls from 8-800 or 8-495 numbers."
+                    })
+
     return details
 
 
@@ -288,7 +323,23 @@ def get_recommendations(verdict: str, analysis_type: str, features: dict) -> lis
              "en": "💡 Always stay vigilant online, avoid opening unfamiliar links."},
         ]
 
-    if analysis_type == "url":
+    if analysis_type == "phone":
+        if verdict == "phishing" or verdict == "suspicious":
+            recs = [
+                {"kz": "⛔ Бұл нөмірге өзіңіз туралы ақпарат бермеңіз!", 
+                 "ru": "⛔ Ни в коем случае не сообщайте свои данные по этому номеру!",
+                 "en": "⛔ Do not provide any personal information to this number!"},
+                {"kz": "📞 Егер олар банкпіз десе, тұтқаны қойып, банктің ресми нөміріне өзіңіз хабарласыңыз.", 
+                 "ru": "📞 Если представляются банком, повесьте трубку и перезвоните по официальному номеру.",
+                 "en": "📞 If they claim to be a bank, hang up and call the official bank number yourself."},
+            ]
+        else:
+            recs = [
+                {"kz": "✅ Бұл нөмір қауіпсіз сияқты. Дегенмен сақ болыңыз.", 
+                 "ru": "✅ Номер выглядит безопасным, но будьте внимательны.",
+                 "en": "✅ The number looks safe, but remain cautious."},
+            ]
+    elif analysis_type == "url":
         if features.get('has_ip', 0):
             recs.append({"kz": "🚫 Сандардан тұратын сілтемелерді ашпаңыз, бұл қауіпті.",
                          "ru": "🚫 Не открывайте ссылки, состоящие только из цифр, это опасно.",
@@ -367,7 +418,8 @@ def analyze_url(request: UrlRequest, db: Session = Depends(get_db)):
     detailed_analysis = generate_detailed_analysis(features, "url", heuristic_issues)
 
     # Save to history
-    save_analysis(db, 'url', request.url, final_score, final_verdict, json.dumps(combined_details))
+    if not request.skip_db:
+        save_analysis(db, 'url', request.url, final_score, final_verdict, json.dumps(combined_details))
 
     return AnalysisResponse(
         score=final_score,
@@ -496,6 +548,30 @@ def analyze_qr(file: UploadFile = File(...), db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error processing QR code: {str(e)}")
 
 
+@app.post("/api/analyze-phone", response_model=AnalysisResponse)
+def analyze_phone_endpoint(request: PhoneRequest, db: Session = Depends(get_db)):
+    """Analyze a phone number for scam risks."""
+    score, verdict, details = do_analyze_phone(request.phone)
+    risk_level = get_risk_level(score)
+    heuristic_issues = details.get('issues', [])
+    recommendations = get_recommendations(verdict, "phone", {})
+    detailed_analysis = generate_detailed_analysis({}, "phone", heuristic_issues)
+
+    if not request.skip_db:
+        save_analysis(db, 'phone', request.phone, score, verdict, json.dumps(details))
+
+    return AnalysisResponse(
+        score=score,
+        verdict=verdict,
+        risk_level=risk_level,
+        features={},
+        model_details=details,
+        recommendations=recommendations,
+        detailed_analysis=detailed_analysis,
+        timestamp=datetime.utcnow().isoformat()
+    )
+
+
 @app.get("/api/history")
 def get_analysis_history(limit: int = 50, type: Optional[str] = None, db: Session = Depends(get_db)):
     """Get analysis history."""
@@ -540,6 +616,7 @@ def root():
             "POST /api/analyze-url",
             "POST /api/analyze-email",
             "POST /api/analyze-qr",
+            "POST /api/analyze-phone",
             "POST /api/chat",
             "GET /api/chat/suggestions",
             "GET /api/history",

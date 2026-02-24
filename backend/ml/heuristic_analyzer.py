@@ -102,9 +102,17 @@ TYPO_SUBSTITUTIONS = {
     'g': ['9', 'q'],
     'b': ['d', '6'],
     't': ['7', '+'],
-    'n': ['m'],
     'm': ['n', 'rn'],  # rn looks like m
 }
+
+# ─── Casino & Gambling Keywords ──────────────────────────────────────────
+CASINO_KEYWORDS = [
+    'casino', 'vulkan', 'vulcan', '1xbet', 'betting', 'stavki', 'azino',
+    'joycasino', 'sloty', 'slots', 'spin', 'jackpot', 'pinup', '1win',
+    'melbet', 'parimatch', 'olimpbet', 'fonbet', 'казино', 'вулкан',
+    'ставка', 'ставки', 'рулетка', 'автоматы', 'азино', 'win', 'lotto',
+    'lottery', 'лотерея', 'розыгрыш'
+]
 
 
 def _levenshtein_distance(s1: str, s2: str) -> int:
@@ -243,6 +251,35 @@ def check_typosquatting(domain: str) -> List[Dict[str, Any]]:
 
         if best_match:
             issues.append(best_match)
+
+    return issues
+
+
+def check_casino_patterns(url: str, domain: str) -> List[Dict[str, Any]]:
+    """
+    Check if the URL or domain contains casino, gambling or betting keywords.
+    """
+    issues = []
+    domain_lower = _normalize_domain(domain)
+    url_lower = url.lower()
+    
+    keyword_matches = [kw for kw in CASINO_KEYWORDS if kw in url_lower]
+    
+    # We assign higher severity if the keyword is in the domain
+    domain_matches = [kw for kw in CASINO_KEYWORDS if kw in domain_lower]
+    
+    if domain_matches:
+        issues.append({
+            'type': 'casino_gambling',
+            'severity': 0.85,
+            'detail': f'Domain contains gambling/casino keywords: {", ".join(domain_matches[:3])}',
+        })
+    elif keyword_matches:
+        issues.append({
+            'type': 'casino_gambling',
+            'severity': 0.6,
+            'detail': f'URL path contains gambling/casino keywords: {", ".join(keyword_matches[:3])}',
+        })
 
     return issues
 
@@ -481,6 +518,7 @@ def analyze_url_heuristic(url: str) -> Tuple[float, str, Dict[str, Any]]:
     all_issues.extend(check_brand_impersonation(url, domain))
     all_issues.extend(check_typosquatting(domain))
     all_issues.extend(check_url_patterns(url, domain, parsed))
+    all_issues.extend(check_casino_patterns(url, domain))
 
     # Calculate final score based on issues
     if not all_issues:

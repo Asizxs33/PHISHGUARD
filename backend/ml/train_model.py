@@ -12,8 +12,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from ml.features import extract_url_features, extract_email_features, get_url_feature_names, get_email_feature_names
+from ml.features import (extract_url_features, extract_email_features, extract_phone_features,
+                         get_url_feature_names, get_email_feature_names, get_phone_feature_names)
 from ml.classifier import PhishingClassifier
 
 
@@ -427,6 +427,71 @@ def generate_email_dataset(n_samples: int = 4000) -> pd.DataFrame:
     return pd.DataFrame(data)
 
 
+def generate_phone_dataset(n_samples: int = 4000) -> pd.DataFrame:
+    """Generate synthetic phone dataset for deep learning training."""
+    data = []
+    half = n_samples // 2
+
+    # --- Safe phones (Normal CIS and generic international) ---
+    for _ in range(half):
+        # Ordinary 10-digit mobile or landline
+        prefix = random.choice(['+7701', '+7705', '+7707', '+7777', '+7702', '+7708', '+996555', '+99890'])
+        suffix = ''.join(random.choices('0123456789', k=7))
+        phone = prefix + suffix
+        # sometimes add spaces
+        if random.random() > 0.5:
+            phone = f"{prefix} {suffix[:3]} {suffix[3:5]} {suffix[5:]}"
+            
+        features = extract_phone_features(phone)
+        features['label'] = 0
+        data.append(features)
+
+    # --- Phishing/Scam phones ---
+    phishing_count = 0
+    
+    # 1. High risk prefixes
+    while phishing_count < half * 0.3:
+        prefix = random.choice(['+234', '+91', '+44', '+371', '+372', '+380'])
+        suffix = ''.join(random.choices('0123456789', k=random.randint(6, 10)))
+        features = extract_phone_features(prefix + suffix)
+        features['label'] = 1
+        data.append(features)
+        phishing_count += 1
+        
+    # 2. Toll-free Spoofing
+    while phishing_count < half * 0.5:
+        prefix = random.choice(['+7800', '+7495', '+7499'])
+        suffix = ''.join(random.choices('0123456789', k=7))
+        features = extract_phone_features(prefix + suffix)
+        features['label'] = 1
+        data.append(features)
+        phishing_count += 1
+
+    # 3. Invalid length / shortcodes
+    while phishing_count < half * 0.7:
+        length = random.choice([3, 4, 5, 16, 18, 20])
+        phone = '+' + ''.join(random.choices('0123456789', k=length))
+        features = extract_phone_features(phone)
+        features['label'] = 1
+        data.append(features)
+        phishing_count += 1
+
+    # 4. Low entropy / repeating digits (Auto-dialers / raw generated)
+    while phishing_count < half:
+        digit = random.choice('0123456789')
+        phone = '+7' + (digit * 10)
+        # Add slight variation occasionally
+        if random.random() > 0.5:
+            phone = phone[:-2] + random.choice('0123456789') + random.choice('0123456789')
+            
+        features = extract_phone_features(phone)
+        features['label'] = 1
+        data.append(features)
+        phishing_count += 1
+        
+    return pd.DataFrame(data)
+
+
 def train_url_model():
     """Train and save URL phishing deep learning classifier (Enhanced)."""
     print("=" * 65)
@@ -519,11 +584,59 @@ def train_email_model():
     return classifier
 
 
+def train_phone_model():
+    """Train and save phone scam deep learning classifier."""
+    print("\n" + "=" * 65)
+    print("📞 Training Phone Scam Classifier (Deep Learning)")
+    print("=" * 65)
+
+    df = generate_phone_dataset(4000)
+    feature_names = get_phone_feature_names()
+    X = df[feature_names].values
+    y = df['label'].values
+
+    print(f"\n📦 Dataset: {len(df)} samples ({(y==0).sum()} safe, {(y==1).sum()} phishing)")
+    print(f"📐 Features: {len(feature_names)}")
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+    classifier = PhishingClassifier()
+    # Phone dataset is usually simpler, 50 epochs should be plenty
+    metrics = classifier.train(X_train, y_train, feature_names, epochs=50, batch_size=64, lr=0.001)
+
+    # ── Evaluate on test set ──
+    print(f"\n{'─' * 50}")
+    print(f"📊 Training Summary:")
+    print(f"   Architecture:      {metrics['architecture']}")
+    print(f"   Parameters:        {metrics['total_parameters']:,}")
+    print(f"   Epochs trained:    {metrics['epochs_trained']}")
+    print(f"   Best Val Accuracy: {metrics['best_val_accuracy']:.4f}")
+    print(f"   Best Val Loss:     {metrics['best_val_loss']:.4f}")
+
+    y_pred_scores = []
+    for i in range(len(X_test)):
+        score, _, _ = classifier.predict(X_test[i])
+        y_pred_scores.append(1 if score >= 0.5 else 0)
+    y_pred = np.array(y_pred_scores)
+
+    print(f"\n📈 Test Set Metrics ({len(X_test)} samples):")
+    print(f"   Accuracy:  {accuracy_score(y_test, y_pred):.4f}")
+    print(f"   Precision: {precision_score(y_test, y_pred):.4f}")
+    print(f"   Recall:    {recall_score(y_test, y_pred):.4f}")
+    print(f"   F1-Score:  {f1_score(y_test, y_pred):.4f}")
+    print(f"\n📋 Classification Report:")
+    print(classification_report(y_test, y_pred, target_names=['Safe', 'Phishing']))
+
+    classifier.save('phone_model')
+    return classifier
+
+
 if __name__ == '__main__':
     print("🛡️ PhishGuard AI — Enhanced Deep Learning Model Training")
     print("=" * 65)
     train_url_model()
     train_email_model()
+    train_phone_model()
     print("\n" + "=" * 65)
     print("✅ All enhanced deep learning models trained and saved successfully!")
     print("=" * 65)

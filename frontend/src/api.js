@@ -14,6 +14,12 @@ export const analyzeUrl = async (url) => {
     return response.data
 }
 
+export const analyzePhone = async (phone) => {
+    const response = await api.post('/analyze-phone', { phone })
+    return response.data
+}
+
+
 export const analyzeEmail = async (subject, body, sender) => {
     const response = await api.post('/analyze-email', { subject, body, sender })
     return response.data

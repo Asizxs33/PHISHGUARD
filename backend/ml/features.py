@@ -1,14 +1,19 @@
 """
 PhishGuard AI — Feature Extraction Module (Enhanced)
-Extracts features from URLs and email content for phishing detection.
+Extracts features from URLs, email content, and phone numbers for phishing detection.
 Includes advanced features: brand similarity, punycode detection,
-path suspiciousness, and more.
+path suspiciousness, and entropy for phone numbers.
 """
 
 import re
 import math
 from urllib.parse import urlparse, parse_qs
 from typing import Dict, Any, List
+
+# --- Phone Constants ---
+HIGH_RISK_PREFIXES_LIST = ['+234', '+91', '+44', '+371', '+372', '+380']
+TOLL_FREE_PREFIXES = ['+7800', '+7495', '+7499']
+CIS_PREFIXES = ['+7', '+996', '+998']
 
 # Suspicious keywords commonly found in phishing URLs
 SUSPICIOUS_URL_KEYWORDS = [
@@ -362,4 +367,67 @@ def get_email_feature_names() -> List[str]:
         'html_tag_count', 'html_text_ratio', 'exclamation_count', 'question_count',
         'caps_ratio', 'mentions_attachment', 'has_money_ref', 'text_entropy',
         'first_link_suspicious', 'first_link_has_ip'
+    ]
+
+
+def extract_phone_features(phone: str) -> Dict[str, Any]:
+    """Extract numerical features from a phone number for ML classification."""
+    features = {}
+    
+    # Base transformations
+    cleaned = re.sub(r'[\s\-\(\)]', '', phone)
+    digits = re.sub(r'\D', '', cleaned)
+    
+    if not cleaned.startswith('+') and digits.startswith('7'):
+        formatted = '+' + cleaned
+    elif not cleaned.startswith('+') and digits.startswith('8'):
+        formatted = '+7' + digits[1:]
+    elif not cleaned.startswith('+'):
+        formatted = '+' + cleaned
+    else:
+        formatted = cleaned
+
+    # 1. Lengths
+    features['total_length'] = len(phone)
+    features['digit_count'] = len(digits)
+    
+    # 2. Ratios
+    features['digit_ratio'] = len(digits) / max(len(phone), 1)
+    
+    # 3. High Risk indicators
+    features['has_high_risk_prefix'] = 1 if any(formatted.startswith(p) for p in HIGH_RISK_PREFIXES_LIST) else 0
+    features['is_toll_free_spoofing'] = 1 if any(formatted.startswith(p) for p in TOLL_FREE_PREFIXES) else 0
+    
+    # 4. Regional indicators
+    is_cis = any(formatted.startswith(p) for p in CIS_PREFIXES)
+    features['is_foreign'] = 1 if not is_cis and not features['has_high_risk_prefix'] else 0
+    features['starts_with_plus'] = 1 if phone.strip().startswith('+') else 0
+
+    # 5. Math / Entropy
+    features['digit_entropy'] = _calculate_entropy(digits)
+    
+    # 6. Consecutive digits (often found in generated or premium numbers)
+    max_consec = 1
+    current_consec = 1
+    for i in range(1, len(digits)):
+        if digits[i] == digits[i-1]:
+            current_consec += 1
+            max_consec = max(max_consec, current_consec)
+        else:
+            current_consec = 1
+    features['max_consecutive_digits'] = max_consec
+
+    # 7. Unique digits ratio
+    unique_digits = len(set(digits))
+    features['unique_digits_ratio'] = unique_digits / max(len(digits), 1)
+
+    return features
+
+
+def get_phone_feature_names() -> List[str]:
+    """Return ordered list of phone tracking feature names."""
+    return [
+        'total_length', 'digit_count', 'digit_ratio', 'has_high_risk_prefix',
+        'is_toll_free_spoofing', 'is_foreign', 'starts_with_plus', 
+        'digit_entropy', 'max_consecutive_digits', 'unique_digits_ratio'
     ]
