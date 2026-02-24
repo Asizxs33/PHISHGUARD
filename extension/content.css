@@ -1,0 +1,197 @@
+/* CyberQalqan AI Overlay Styles */
+#cq-phishguard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2147483647;
+    /* Maximum possible z-index */
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #ffffff;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+#cq-phishguard-overlay .cq-container {
+    background: rgba(26, 26, 26, 0.95);
+    border: 1px solid rgba(255, 77, 79, 0.3);
+    border-radius: 16px;
+    max-width: 600px;
+    width: 90%;
+    padding: 40px;
+    box-shadow: 0 0 40px rgba(255, 77, 79, 0.2), inset 0 0 20px rgba(255, 77, 79, 0.05);
+    text-align: left;
+    animation: cq-fade-in 0.3s ease-out forwards;
+}
+
+@keyframes cq-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+#cq-phishguard-overlay .cq-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+#cq-phishguard-overlay .cq-icon {
+    font-size: 48px;
+    animation: cq-pulse 2s infinite;
+}
+
+@keyframes cq-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+#cq-phishguard-overlay .cq-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #ff4d4f;
+    /* Neon Red */
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#cq-phishguard-overlay .cq-subtitle {
+    font-size: 16px;
+    color: #d9d9d9;
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+#cq-phishguard-overlay .cq-subtitle strong {
+    color: #ff4d4f;
+    word-break: break-all;
+}
+
+#cq-phishguard-overlay .cq-details {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+#cq-phishguard-overlay .cq-details h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #8c8c8c;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#cq-phishguard-overlay .cq-confidence {
+    font-size: 18px;
+    margin: 0 0 16px 0;
+}
+
+#cq-phishguard-overlay .cq-confidence span {
+    color: #ff4d4f;
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(255, 77, 79, 0.4);
+}
+
+#cq-phishguard-overlay .cq-reasons {
+    margin: 0;
+    padding-left: 20px;
+    color: #bfbfbf;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+#cq-phishguard-overlay .cq-reasons li {
+    margin-bottom: 8px;
+}
+
+#cq-phishguard-overlay .cq-recommendation {
+    font-size: 15px;
+    color: #e6e6e6;
+    font-weight: 500;
+    margin-bottom: 32px;
+}
+
+#cq-phishguard-overlay .cq-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+}
+
+#cq-phishguard-overlay .cq-btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    border: none;
+}
+
+#cq-phishguard-overlay .cq-btn-primary {
+    background: #ff4d4f;
+    color: white;
+    box-shadow: 0 4px 14px 0 rgba(255, 77, 79, 0.39);
+}
+
+#cq-phishguard-overlay .cq-btn-primary:hover {
+    background: #ff7875;
+    box-shadow: 0 6px 20px rgba(255, 77, 79, 0.23);
+    transform: translateY(-1px);
+}
+
+#cq-phishguard-overlay .cq-btn-secondary {
+    background: transparent;
+    color: #8c8c8c;
+    border: 1px solid #434343;
+}
+
+#cq-phishguard-overlay .cq-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #e6e6e6;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 600px) {
+    #cq-phishguard-overlay .cq-container {
+        padding: 24px;
+    }
+
+    #cq-phishguard-overlay .cq-actions {
+        flex-direction: column;
+    }
+
+    #cq-phishguard-overlay .cq-btn {
+        width: 100%;
+    }
+}

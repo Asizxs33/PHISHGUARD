@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>CyberQalqan AI</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <div class="popup-container">
+        <header>
+            <div class="logo-container">
+                <!-- SVG Shield Icon -->
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" class="shield-icon">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+            </div>
+            <h1>CyberQalqan AI</h1>
+        </header>
+
+        <main>
+            <div id="status-card" class="status-card loading">
+                <div class="status-icon" id="status-icon">🔄</div>
+                <div class="status-text">
+                    <h2 id="status-title">Анализируем...</h2>
+                    <p id="status-desc">Проверка текущей страницы</p>
+                </div>
+            </div>
+
+            <div class="stats-section">
+                <div class="stat-item">
+                    <span class="stat-label">Модель ML</span>
+                    <span class="stat-value">Активна</span>
+                </div>
+                <div class="stat-item" id="confidence-row" style="display: none;">
+                    <span class="stat-label">Уверенность</span>
+                    <span class="stat-value highlight" id="confidence-value">--%</span>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button id="rescan-btn" class="btn btn-primary">Повторить скан</button>
+                <button id="dashboard-btn" class="btn btn-secondary">В панель</button>
+            </div>
+        </main>
+
+        <footer>
+            <p>Real-time protection by <a href="#" id="link-phishguard">CyberQalqan</a></p>
+        </footer>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+</body>
+
+</html>

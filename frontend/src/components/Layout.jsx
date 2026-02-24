@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
 const navItems = [
-    { path: '/', icon: '◈', label: 'Басқару орталығы', tag: 'DASHBOARD' },
+    { path: '/dashboard', icon: '◈', label: 'Басқару орталығы', tag: 'DASHBOARD' },
     { path: '/url', icon: '⬡', label: 'URL тексеру', tag: 'URL SCAN' },
     { path: '/email', icon: '✉', label: 'Email талдау', tag: 'EMAIL INTEL' },
     { path: '/qr', icon: '⬢', label: 'QR код', tag: 'QR DECODE' },
@@ -56,7 +56,7 @@ export default function Layout({ children }) {
                 {/* Navigation */}
                 <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto">
                     {navItems.map(item => (
-                        <NavLink key={item.path} to={item.path} end={item.path === '/'}
+                        <NavLink key={item.path} to={item.path} end={item.path === '/dashboard'}
                             onClick={() => setOpen(false)}
                             className={({ isActive }) =>
                                 `group flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm transition-all duration-300 relative overflow-hidden
@@ -114,8 +114,8 @@ export default function Layout({ children }) {
             </aside>
 
             {/* Main */}
-            <main className="main-wrap ml-[270px] p-8 flex-1 min-h-screen">
-                <div key={location.pathname} className="fade-up max-w-[1050px]">
+            <main className="main-wrap ml-[270px] p-8 flex-1 min-h-screen flex justify-center">
+                <div key={location.pathname} className="fade-up w-full max-w-[1050px]">
                     {children}
                 </div>
 
