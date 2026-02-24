@@ -150,11 +150,15 @@ def _extract_base_domain(domain: str) -> str:
     parts = domain.split('.')
     if len(parts) <= 2:
         return domain
-    # Country-code second-level domains like .co.uk, .com.kz
-    country_second = ['.co.', '.com.', '.org.', '.net.', '.gov.', '.edu.']
-    rejoined = '.' + '.'.join(parts[-2:])
-    if any(rejoined.startswith(cs.rstrip('.')) for cs in country_second):
-        return '.'.join(parts[-3:]) if len(parts) >= 3 else domain
+    
+    # Country-code second-level domains generally have a 2-letter TLD (like .kz, .uk)
+    # and a common second-level string (like .co, .com, .gov).
+    part_tld = parts[-1]
+    part_sld = parts[-2]
+    
+    if len(part_tld) == 2 and part_sld in ['co', 'com', 'org', 'net', 'gov', 'edu', 'ac', 'mil']:
+        return '.'.join(parts[-3:])
+        
     return '.'.join(parts[-2:])
 
 
