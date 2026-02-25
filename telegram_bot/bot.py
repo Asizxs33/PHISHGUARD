@@ -228,9 +228,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Welcome message with main menu."""
     keyboard = [
         [KeyboardButton("🔗 URL тексеру"), KeyboardButton("📧 Email тексеру")],
-        [KeyboardButton("📷 QR код тексеру"), KeyboardButton("📱 Нөмірді тексеру")],
-        [KeyboardButton("💬 AI Кеңесші"), KeyboardButton("📊 Статистика")],
-        [KeyboardButton("📜 Тарих"), KeyboardButton("🛑 Қауіпті домендер")],
+        [KeyboardButton("📷 Фото тексеру"), KeyboardButton("📱 Нөмірді тексеру")],
+        [KeyboardButton("🎙️ Аудио/Дауыс"), KeyboardButton("💬 AI Кеңесші")],
+        [KeyboardButton("📊 Статистика"), KeyboardButton("📜 Тарих")],
+        [KeyboardButton("🛑 Қауіпті домендер")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -893,6 +894,15 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text("⚠️ Сервер қатесі. Кейінірек қайталап көріңіз.")
 
 
+async def audio_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Prompt the user to send an audio/voice message when they click the button."""
+    await update.message.reply_text(
+        "🎙️ *Аудио/Дауыс тексеру*\n\n"
+        "Маған кез-келген дауыстық хабарлама (голосовое) немесе аудио файл жіберіңіз.\n"
+        "Мен оның мәтінін оқып, ішінде алаяқтық (vishing) белгілері бар-жоғын тексеремін!",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
 # ─── Cancel & Error ──────────────────────────────────────────────────────
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -962,7 +972,7 @@ def main():
     qr_conv = ConversationHandler(
         entry_points=[
             CommandHandler("qr", qr_command),
-            MessageHandler(filters.Regex("^📷 QR код тексеру$"), qr_command),
+            MessageHandler(filters.Regex("^📷 Фото тексеру$"), qr_command),
         ],
         states={WAITING_QR: [MessageHandler(filters.PHOTO | filters.Document.IMAGE, receive_photo)]},
         fallbacks=[CommandHandler("cancel", cancel)],
@@ -984,6 +994,7 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^📜 Тарих$"), history_command))
     app.add_handler(MessageHandler(filters.Regex("^🛑 Қауіпті домендер$"), download_domains_command))
     app.add_handler(MessageHandler(filters.Regex("^💬 AI Кеңесші$"), ai_button_handler))
+    app.add_handler(MessageHandler(filters.Regex("^🎙️ Аудио/Дауыс$"), audio_button_handler))
     app.add_handler(MessageHandler(filters.PHOTO, receive_photo))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, voice_handler))
     app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND, chat_handler))
