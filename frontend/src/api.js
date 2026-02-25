@@ -53,6 +53,20 @@ export const analyzeAudio = async (file) => {
     return response.data
 }
 
+export const analyzeVideo = async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post('/analyze-video', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+}
+
+export const generateSimulation = async () => {
+    const response = await api.get('/simulator/generate')
+    return response.data
+}
+
 export const getHistory = async (limit = 50, type = null) => {
     const params = { limit }
     if (type) params.type = type

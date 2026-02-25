@@ -231,7 +231,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [KeyboardButton("📷 Фото тексеру"), KeyboardButton("📱 Нөмірді тексеру")],
         [KeyboardButton("🎙️ Аудио/Дауыс"), KeyboardButton("💬 AI Кеңесші")],
         [KeyboardButton("📊 Статистика"), KeyboardButton("📜 Тарих")],
-        [KeyboardButton("🛑 Қауіпті домендер")],
+        [KeyboardButton("🛑 Қауіпті домендер"), KeyboardButton("🎮 Тренажер")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -245,6 +245,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📱 *Нөмірді тексеру* — телефон нөмірін алаяқтарға тексеру\n"
         "🎙️ *Аудио/Дауыс* — голосовой (vishing) талдау (тек файл жіберіңіз)\n"
         "💬 *AI Кеңесші* — кибер қауіпсіздік бойынша кеңес\n"
+        "🎮 *Тренажер* — фишингке алданып қалмауды үйрететін симулятор\n"
         "📊 *Статистика* — жалпы талдау статистикасы\n"
         "📜 *Тарих* — соңғы тексерулер\n"
         "🛑 *Қауіпті домендер* — бұғатталған сайттар тізімі (жүктеу)\n\n"
@@ -850,6 +851,65 @@ async def inline_button_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 await query.message.reply_text(f"🤖 CyberQalqan AI:\n\n{response_text}")
 
 
+# ─── Phishing Simulator ────────────────────────────────────────────────────
+
+async def simulator_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start a phishing simulation training session."""
+    await update.message.chat.send_action(ChatAction.TYPING)
+    msg = await update.message.reply_text("🎮 *Phishing Simulator*\n\nАлаяқтық жағдай жасалуда... / Генерирую тестовый сценарий...\n⏳ Күте тұрыңыз...", parse_mode=ParseMode.MARKDOWN)
+
+    # Call the backend API to generate a scenario
+    result = await api_request("GET", "/api/simulator/generate")
+    
+    if result and "scenario" in result:
+        scenario = result["scenario"]
+        
+        # Determine language preference based on common user strings or just dual-lingo
+        # For the test, we will show the fake message in the generated language, but buttons in dual
+        
+        sim_msg_kz = scenario.get("message_kz", "")
+        sim_msg_ru = scenario.get("message_ru", "")
+        sender = scenario.get("sender", "Unknown")
+        sim_type = scenario.get("type", "sms").upper()
+        
+        # Save explanations to context for the callback query
+        import uuid
+        scenario_id = str(uuid.uuid4())[:8]
+        context.user_data[f"sim_{scenario_id}"] = {
+            "explanation_kz": scenario.get("explanation_kz", ""),
+            "explanation_ru": scenario.get("explanation_ru", "")
+        }
+        
+        text = (
+            f"🚨 *ЖАТТЫҒУ / ТРЕНИРОВКА*\n\n"
+            f"Сізге жаңа хабарлама келді елестетіңіз:\n"
+            f"Представьте, что вам пришло следующее сообщение:\n\n"
+            f"📱 *Қайдан / От:* {sender} ({sim_type})\n"
+            f"💬 *Мәтін / Текст:*\n"
+            f"🇰🇿 {sim_msg_kz}\n"
+            f"─────\n"
+            f"🇷🇺 {sim_msg_ru}\n\n"
+            f"🤔 *Не істейсіз? / Что будете делать?*"
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Мына сілтемеге өту (Перейти по ссылке)", callback_data=f"sim_fail_{scenario_id}")
+            ],
+            [
+                InlineKeyboardButton("🛑 Жоқ! Бұл алаяқтар (Нет! Это мошенники)", callback_data=f"sim_pass_{scenario_id}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        try:
+            await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+        except Exception:
+            await msg.edit_text(text.replace("*", ""), reply_markup=reply_markup)
+            
+    else:
+        await msg.edit_text("❌ Сервер қатесі. Сценарий құру мүмкін болмады. / Ошибка создания сценария.")
+
 # ─── Voice / Audio Analysis ──────────────────────────────────────────────
 
 async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -894,6 +954,56 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text("⚠️ Сервер қатесі. Кейінірек қайталап көріңіз.")
 
 
+async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle video messages and send them for deepfake and vishing analysis."""
+    if not update.message or (not update.message.video and not update.message.document):
+        return
+
+    # Just in case it's a document but not a video format
+    if update.message.document and not str(update.message.document.mime_type).startswith('video/'):
+        return
+
+    await update.message.chat.send_action(ChatAction.RECORD_VIDEO)
+    msg = await update.message.reply_text("📹 Бейнежазба (видео) сарапталуда...\n\nТергеу ИИ (Deepfake) мен Вишинг белгілеріне жүргізіліп жатыр.\n⏳ Күте тұрыңыз...")
+
+    try:
+        video_file = update.message.video or update.message.document
+        file = await video_file.get_file()
+        
+        # Check size (Render free tier limitations)
+        if hasattr(file, 'file_size') and file.file_size > 20 * 1024 * 1024:
+            await msg.edit_text("⚠️ Файл тым үлкен (20 МБ-тан аспауы тиіс). / Файл слишком большой.")
+            return
+            
+        video_bytes = await file.download_as_bytearray()
+        
+        result = await api_request(
+            "POST", "/api/analyze-video",
+            files={"file": ("video.mp4", io.BytesIO(video_bytes), "video/mp4")}
+        )
+        
+        if result:
+            transcript = result.get("transcript", "")
+            analysis = result.get("analysis", {}).get("answer", {})
+            
+            if isinstance(analysis, dict):
+                ai_text = analysis.get("kz", analysis.get("ru", analysis.get("en", "..."))).strip()
+            else:
+                ai_text = str(analysis).strip()
+                
+            ai_text = escape_md(ai_text)
+            safe_transcript = escape_md(transcript[:500])
+            
+            text = f"📹 *Видео Транскрипциясы:*\n_{safe_transcript}_\n\n🤖 *CyberQalqan AI (Deepfake түйіні):*\n{ai_text}"
+            try:
+                await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+            except Exception:
+                await msg.edit_text(text.replace("*", "").replace("_", ""))
+        else:
+            await msg.edit_text("❌ Кешіріңіз, бейнежазбаны сараптау мүмкін болмады.")
+    except Exception as e:
+        logger.error(f"Video handling error: {e}")
+        await msg.edit_text("⚠️ Сервер қатесі. Видео пішімі қате немесе серверде орын жоқ.")
 async def audio_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Prompt the user to send an audio/voice message when they click the button."""
     await update.message.reply_text(
@@ -995,8 +1105,10 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^🛑 Қауіпті домендер$"), download_domains_command))
     app.add_handler(MessageHandler(filters.Regex("^💬 AI Кеңесші$"), ai_button_handler))
     app.add_handler(MessageHandler(filters.Regex("^🎙️ Аудио/Дауыс$"), audio_button_handler))
+    app.add_handler(MessageHandler(filters.Regex("^🎮 Тренажер$"), simulator_command))
     app.add_handler(MessageHandler(filters.PHOTO, receive_photo))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, voice_handler))
+    app.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, video_handler))
     app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND, chat_handler))
 
     app.add_error_handler(error_handler)

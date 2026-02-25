@@ -641,7 +641,11 @@ def analyze_qr(background_tasks: BackgroundTasks, file: UploadFile = File(...), 
         heuristic_issues = h_details.get('issues', [])
         
         try:
-            content_issues = analyze_page_content(decoded_url)
+            # SECURITY UPDATE: Do not fetch page HTML for QR codes to prevent accidental 
+            # execution of payloads/tracking pixels. Rely ONLY on OSINT and heuristics.
+            from .ml.page_analyzer import check_domain_osint
+            content_issues = check_domain_osint(decoded_url)
+            
             if content_issues:
                 heuristic_issues.extend(content_issues)
                 
@@ -666,9 +670,9 @@ def analyze_qr(background_tasks: BackgroundTasks, file: UploadFile = File(...), 
                     
                     h_details['issues'] = heuristic_issues
                     h_details['heuristic_score'] = h_score
-                    h_details['checks_performed'] = h_details.get('checks_performed', []) + ['page_content_analysis']
+                    h_details['checks_performed'] = h_details.get('checks_performed', []) + ['osint_blacklist_check']
         except Exception as e:
-            print(f"QR Content Analysis failed for {decoded_url}: {e}")
+            print(f"QR OSINT Analysis failed for {decoded_url}: {e}")
 
         features = extract_url_features(decoded_url)
         feature_names = get_url_feature_names()
@@ -823,9 +827,11 @@ async def analyze_audio(file: UploadFile = File(...)):
         transcript = ""
         try:
             try:
-                transcript = recognizer.recognize_google(audio_data, language="ru-RU")
-            except sr.UnknownValueError:
+                # Try Kazakh first as requested by user
                 transcript = recognizer.recognize_google(audio_data, language="kk-KZ")
+            except sr.UnknownValueError:
+                # Fallback to Russian
+                transcript = recognizer.recognize_google(audio_data, language="ru-RU")
         except sr.UnknownValueError:
             raise HTTPException(status_code=422, detail="Дауыс танылмады / Голос не распознан. Текст не найден.")
         except sr.RequestError as e:
@@ -852,6 +858,82 @@ async def analyze_audio(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Analyze Audio Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/analyze-video")
+async def analyze_video(file: UploadFile = File(...)):
+    """Analyze a video message (.mp4, etc) for deepfakes and vishing."""
+    try:
+        import tempfile
+        import os
+        from pydub import AudioSegment
+        import speech_recognition as sr
+        
+        fd, temp_path = tempfile.mkstemp(suffix=".mp4")
+        with os.fdopen(fd, 'wb') as f:
+            f.write(await file.read())
+            
+        wav_path = temp_path + ".wav"
+        try:
+            # pydub uses ffmpeg which can extract audio directly from video files
+            audio = AudioSegment.from_file(temp_path)
+            audio.export(wav_path, format="wav")
+        except Exception as e:
+            print(f"Video to Audio conversion error: {e}")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise HTTPException(status_code=400, detail="Could not process video file format.")
+            
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio_data = recognizer.record(source)
+            
+        transcript = ""
+        try:
+            try:
+                # Try Kazakh first as requested by user
+                transcript = recognizer.recognize_google(audio_data, language="kk-KZ")
+            except sr.UnknownValueError:
+                # Fallback to Russian
+                transcript = recognizer.recognize_google(audio_data, language="ru-RU")
+        except sr.UnknownValueError:
+            raise HTTPException(status_code=422, detail="Дауыс танылмады / Голос не распознан. Текст не найден.")
+        except sr.RequestError as e:
+            print(f"Speech Recognition API Error: {e}")
+            raise HTTPException(status_code=503, detail="Speech Recognition service unavailable.")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            if os.path.exists(wav_path):
+                os.remove(wav_path)
+            
+        if not transcript.strip():
+            raise HTTPException(status_code=422, detail="Empty transcript.")
+            
+        analysis_result = analyze_call_transcript(transcript)
+        
+        return {
+            "transcript": transcript,
+            "analysis": analysis_result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Analyze Video Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/simulator/generate")
+def api_generate_simulation():
+    """Generates a random phishing scenario using the LLM for the training simulator."""
+    try:
+        from .ml.cyber_advisor import generate_phishing_simulation
+        scenario = generate_phishing_simulation()
+        return {"scenario": scenario}
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"Simulation error: {str(e)}\n{tb}")
 
 
 @app.get("/api/history")

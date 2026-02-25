@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
-import { analyzeAudio } from '../api'
+import { analyzeAudio, analyzeVideo } from '../api'
 
-export default function AudioAnalyzer() {
+export default function MediaAnalyzer() {
     const [file, setFile] = useState(null)
     const [loading, setLoading] = useState(false)
     const [result, setResult] = useState(null)
@@ -19,7 +19,9 @@ export default function AudioAnalyzer() {
     const handleDrop = (e) => {
         e.preventDefault(); setDragOver(false)
         const f = e.dataTransfer.files[0]
-        if (f?.type.startsWith('audio/') || f?.name.endsWith('.ogg')) { setFile(f); setResult(null); setError('') }
+        if (f?.type.startsWith('audio/') || f?.type.startsWith('video/') || f?.name.endsWith('.ogg') || f?.name.endsWith('.mp4')) {
+            setFile(f); setResult(null); setError('')
+        }
     }
 
     const handleAnalyze = async () => {
@@ -42,7 +44,8 @@ export default function AudioAnalyzer() {
         const minDelay = new Promise(resolve => setTimeout(resolve, steps * stepDuration));
 
         try {
-            const apiPromise = analyzeAudio(file);
+            const isVideo = file.type.startsWith('video/') || file.name.endsWith('.mp4');
+            const apiPromise = isVideo ? analyzeVideo(file) : analyzeAudio(file);
             const [data] = await Promise.all([apiPromise, minDelay]);
             setResult(data);
         } catch (err) {
@@ -55,9 +58,9 @@ export default function AudioAnalyzer() {
     }
 
     const scanStepsUI = [
-        { icon: '🎧', text: 'Аудио жүктеу / Загрузка аудио...' },
-        { icon: '🗣️', text: 'Дауысты мәтінге айналдыру (Speech-to-Text)...' },
-        { icon: '🧠', text: 'Вишингке нейрожелімен талдау / Анализ на вишинг...' },
+        { icon: '🎧', text: 'Медиа файл жүктеу / Загрузка медиа...' },
+        { icon: '🗣️', text: 'Жасанды интеллектпен транскрипция (Speech-to-Text)...' },
+        { icon: '🧠', text: 'Дипфейк және Вишингке талдау / Анализ на Deepfake & Vishing...' },
     ]
 
     return (
@@ -68,10 +71,10 @@ export default function AudioAnalyzer() {
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-1 h-8 rounded-full bg-gradient-to-b from-indigo-400 to-fuchsia-400" />
-                        <h2 className="text-3xl font-black tracking-tight gradient-text">ВИШИНГ / АУДИО ТАЛДАУ</h2>
+                        <h2 className="text-3xl font-black tracking-tight gradient-text">ВИШИНГ МЕН DEEPFAKE ТАЛДАУ</h2>
                     </div>
                     <p className="text-slate-500 text-sm ml-4 font-mono uppercase tracking-widest">
-                        SPEECH-TO-TEXT → LLM SCAM DETECTION
+                        АУДИО / ВИДЕО → ДИПФЕЙК ПЕН АЛАЯҚТЫҚТЫ ТАБУ
                     </p>
                 </div>
             </div>
@@ -103,21 +106,21 @@ export default function AudioAnalyzer() {
                         </div>
                     ) : (
                         <div>
-                            <div className="text-5xl mb-4" style={{ animation: 'float 3s ease-in-out infinite' }}>🎙️</div>
-                            <div className="text-slate-400 font-medium">Дауыстық хабарламаны осында тастаңыз (Drop audio here)</div>
-                            <div className="text-slate-600 text-sm mt-2 font-mono">Қолдау: .mp3, .wav, .ogg (Telegram)</div>
+                            <div className="text-5xl mb-4" style={{ animation: 'float 3s ease-in-out infinite' }}>🎵</div>
+                            <div className="text-slate-400 font-medium">Дауыстық хабарлама немесе видео тастаңыз (Drop media here)</div>
+                            <div className="text-slate-600 text-sm mt-2 font-mono">Қолдау: .mp3, .wav, .ogg (Voice), .mp4 (Video)</div>
                         </div>
                     )}
                 </div>
 
-                <input ref={fileInputRef} type="file" accept="audio/*,.ogg" className="hidden" onChange={handleFileChange} />
+                <input ref={fileInputRef} type="file" accept="audio/*,video/*,.ogg,.mp4" className="hidden" onChange={handleFileChange} />
 
                 <button onClick={handleAnalyze} disabled={!file || loading}
                     className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-600 text-white
                         font-bold shadow-lg shadow-fuchsia-500/25 hover:shadow-xl hover:shadow-fuchsia-500/35
                         hover:-translate-y-1 transition-all disabled:opacity-30 disabled:cursor-not-allowed
                         cursor-pointer text-sm tracking-wide">
-                    {loading ? '⏳ ТАЛДАУ ЖҮРІП ЖАТЫР...' : '🔮 АУДИОНЫ ТАЛДАУ (ANALYZE)'}
+                    {loading ? '⏳ ТАЛДАУ ЖҮРІП ЖАТЫР...' : '🔮 МЕДИАНЫ ТАЛДАУ (ANALYZE MEDIA)'}
                 </button>
             </div>
 
