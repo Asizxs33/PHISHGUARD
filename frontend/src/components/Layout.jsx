@@ -7,6 +7,8 @@ const navItems = [
     { path: '/email', icon: '✉', label: 'Email талдау', tag: 'EMAIL INTEL' },
     { path: '/phone', icon: '📱', label: 'Телефон тексеру', tag: 'PHONE SCAN' },
     { path: '/qr', icon: '⬢', label: 'QR код', tag: 'QR DECODE' },
+    { path: '/image', icon: '🖼️', label: 'Фото талдау', tag: 'IMAGE OCR' },
+    { path: '/audio', icon: '🎙️', label: 'Аудио талдау', tag: 'VOICE INTEL' },
     { path: '/chat', icon: '💬', label: 'Кибер кеңесші', tag: 'AI CHAT' },
     { path: '/training', icon: '🎯', label: 'Тренажер', tag: 'CYBER GAME' },
     { path: '/history', icon: '◎', label: 'Тарих', tag: 'HISTORY' },

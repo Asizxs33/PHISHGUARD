@@ -35,6 +35,24 @@ export const analyzeQr = async (file) => {
     return response.data
 }
 
+export const analyzeImage = async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post('/analyze-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+}
+
+export const analyzeAudio = async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post('/analyze-audio', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+}
+
 export const getHistory = async (limit = 50, type = null) => {
     const params = { limit }
     if (type) params.type = type
