@@ -586,22 +586,48 @@ import re
 # Regex to find URLs anywhere in the text
 URL_REGEX = re.compile(r'(https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)')
 
-def extract_urls(text: str) -> List[str]:
-    """Finds all URLs in a given text message."""
-    if not text:
+def get_urls_from_message(message) -> List[str]:
+    """Extracts URLs from a Telegram message using entities and regex."""
+    if not message:
         return []
-    
-    urls = URL_REGEX.findall(text)
-    # Filter out common false positives like "file.txt" or punctuation
-    clean_urls = []
-    for u in urls:
-        u = u.rstrip(".,;!?()[]{}'\"")
-        if '.' in u and len(u) > 4:
-            # prepend http if missing so our backend handles it properly
-            if not u.startswith(('http://', 'https://')):
-                u = 'http://' + u
-            clean_urls.append(u)
-    return list(set(clean_urls))
+
+    clean_urls = set()
+
+    # 1. Extract from standard entities
+    entities = message.entities or []
+    text = message.text or ""
+    for ent in entities:
+        if ent.type == "url":
+            clean_urls.add(text[ent.offset:ent.offset + ent.length])
+        elif ent.type == "text_link" and ent.url:
+            clean_urls.add(ent.url)
+
+    # 2. Extract from caption entities (if media message)
+    caption_entities = message.caption_entities or []
+    caption = message.caption or ""
+    for ent in caption_entities:
+        if ent.type == "url":
+            clean_urls.add(caption[ent.offset:ent.offset + ent.length])
+        elif ent.type == "text_link" and ent.url:
+            clean_urls.add(ent.url)
+
+    # 3. Fallback to regex testing just in case
+    text_to_search = text + " " + caption
+    if text_to_search.strip():
+        regex_urls = URL_REGEX.findall(text_to_search)
+        for u in regex_urls:
+            u = u.rstrip(".,;!?()[]{}'\"")
+            if '.' in u and len(u) > 4:
+                clean_urls.add(u)
+
+    # Clean up and validate URLs
+    final_urls = []
+    for u in clean_urls:
+        if not u.startswith(('http://', 'https://')):
+            u = 'http://' + u
+        final_urls.append(u)
+
+    return list(final_urls)
 
 
 async def process_urls_in_background(update: Update, context: ContextTypes.DEFAULT_TYPE, urls: List[str]):
@@ -669,19 +695,33 @@ async def process_urls_in_background(update: Update, context: ContextTypes.DEFAU
                 
                 # Stop checking other URLs in this same message once we found a bad one
                 break
+            else:
+                # 4. Action for safe URLs
+                logger.info(f"URL is safe ({verdict} / {score}): {url}")
+                if update.message:
+                    try:
+                        await update.message.reply_text(
+                            "✅ <b>CyberQalqan AI:</b> Сілтеме қауіпсіз / Ссылка безопасна", 
+                            parse_mode=ParseMode.HTML, 
+                            disable_notification=True,
+                            reply_to_message_id=update.message.message_id
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send safe URL confirmation: {e}")
                 
         except Exception as e:
             logger.error(f"Background URL processing error: {e}")
 
 async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle general text. Checks for links first, if none, treats as AI chat."""
-    if not update.message or not update.message.text:
+    if not update.message:
         return
         
-    text = update.message.text.strip()
+    text = update.message.text or update.message.caption or ""
+    text = text.strip()
 
-    # 1. Search for ANY URLs anywhere in the text (for groups)
-    urls = extract_urls(text)
+    # 1. Search for ANY URLs anywhere in the message (text, caption, entities)
+    urls = get_urls_from_message(update.message)
     
     if urls:
         # If it's a private chat and someone just sent a direct link, reply with analysis
@@ -695,6 +735,9 @@ async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # If the bot is in a group, we shouldn't respond to general text with AI chat unless explicitly tagged
         if update.effective_chat.type in ["group", "supergroup"]:
             return
+
+    if not text:
+        return
 
     # If it's a group, only respond to AI chat if the bot is specifically mentioned
     if update.effective_chat.type in ["group", "supergroup"]:
@@ -865,7 +908,7 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^🛑 Қауіпті домендер$"), download_domains_command))
     app.add_handler(MessageHandler(filters.Regex("^💬 AI Кеңесші$"), ai_button_handler))
     app.add_handler(MessageHandler(filters.PHOTO, receive_qr_photo))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_handler))
+    app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND, chat_handler))
 
     app.add_error_handler(error_handler)
 
