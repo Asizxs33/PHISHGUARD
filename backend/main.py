@@ -12,7 +12,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, BackgroundTasks
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -863,7 +863,23 @@ def get_analysis_history(limit: int = 50, type: Optional[str] = None, db: Sessio
 @app.get("/api/dangerous-domains")
 def api_get_dangerous_domains(limit: int = 100, db: Session = Depends(get_db)):
     """Get the list of confirmed dangerous domains."""
-    return {"dangerous_domains": get_dangerous_domains(db, limit)}
+    try:
+        return {"dangerous_domains": get_dangerous_domains(db, limit)}
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        # Return 500 with details so the frontend or curl can see the exact error
+        return JSONResponse(status_code=500, content={"detail": str(e), "traceback": tb})
+
+@app.get("/api/init-db")
+def api_init_db():
+    """Rescue endpoint to manually create tables if they are missing in production."""
+    try:
+        init_db()
+        return {"status": "success", "message": "Database tables created or already exist."}
+    except Exception as e:
+        import traceback
+        return JSONResponse(status_code=500, content={"detail": str(e), "traceback": traceback.format_exc()})
 
 
 @app.get("/api/admin/forensics/{domain}/report", response_class=PlainTextResponse)
