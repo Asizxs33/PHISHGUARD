@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 import re
 
 from urllib.parse import urlparse, urljoin
+from .heuristic_analyzer import BRAND_DOMAINS
 
 # Time to wait for a website to respond
 REQUEST_TIMEOUT = 5.0
@@ -287,30 +288,39 @@ def analyze_page_content(url: str, provided_html: str = None) -> List[Dict[str, 
                 })
                 
     # 9. Deep Analysis: Auto-Redirects
-    # Meta refresh
-    meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile(r'^refresh$', re.I)})
-    if meta_refresh:
-        content = meta_refresh.get('content', '')
-        if 'url=' in content.lower():
-            issues.append({
-                'type': 'meta_refresh_redirect',
-                'severity': 0.75,
-                'detail': 'Page contains a meta-refresh tag to auto-redirect the user to another page.',
-            })
+    
+    # Check if domain belongs to a trusted brand to avoid false positives on complex web apps (like Google Search)
+    is_trusted_brand = False
+    for brand, official_domains in BRAND_DOMAINS.items():
+        if main_domain in official_domains or any(main_domain.endswith('.' + d) for d in official_domains):
+            is_trusted_brand = True
+            break
             
-    # JS redirect simple check (window.location)
-    # We already extracted raw text, but need raw html to search for scripts
-    scripts = soup.find_all('script')
-    for script in scripts:
-        if script.string:
-            script_text = script.string.lower()
-            if 'window.location.replace' in script_text or 'window.location.href' in script_text:
-                if 'http' in script_text:
-                    issues.append({
-                        'type': 'javascript_redirect',
-                        'severity': 0.60,
-                        'detail': 'Page contains JavaScript that forces a redirect.',
-                    })
-                    break
+    if not is_trusted_brand:
+        # Meta refresh
+        meta_refresh = soup.find('meta', attrs={'http-equiv': re.compile(r'^refresh$', re.I)})
+        if meta_refresh:
+            content = meta_refresh.get('content', '')
+            if 'url=' in content.lower():
+                issues.append({
+                    'type': 'meta_refresh_redirect',
+                    'severity': 0.75,
+                    'detail': 'Page contains a meta-refresh tag to auto-redirect the user to another page.',
+                })
+                
+        # JS redirect simple check (window.location)
+        # We already extracted raw text, but need raw html to search for scripts
+        scripts = soup.find_all('script')
+        for script in scripts:
+            if script.string:
+                script_text = script.string.lower()
+                if 'window.location.replace' in script_text or 'window.location.href' in script_text:
+                    if 'http' in script_text:
+                        issues.append({
+                            'type': 'javascript_redirect',
+                            'severity': 0.40, # Lowered from 0.60 to avoid huge false positives
+                            'detail': 'Page contains JavaScript that forces a redirect.',
+                        })
+                        break
 
     return issues
