@@ -60,6 +60,26 @@ class AnalysisHistory(Base):
         }
 
 
+class DangerousDomain(Base):
+    """Model for storing confirmed dangerous domains separated from general history."""
+    __tablename__ = 'dangerous_domains'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    domain = Column(String(255), nullable=False, unique=True)
+    source = Column(String(50), default="user_check")  # e.g., user_check, telegram_bot
+    risk_level = Column(String(20), nullable=True)     # e.g., phishing, critical
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'domain': self.domain,
+            'source': self.source,
+            'risk_level': self.risk_level,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }
+
+
 def init_db():
     """Create all tables."""
     Base.metadata.create_all(bind=engine)
@@ -123,3 +143,28 @@ def get_stats(db):
             'qr': qr_count
         }
     }
+
+
+def save_dangerous_domain(db, domain: str, source: str = "user_check", risk_level: str = "phishing"):
+    """Save a confirmed dangerous domain to the database."""
+    # Check if domain already exists
+    existing = db.query(DangerousDomain).filter(DangerousDomain.domain == domain).first()
+    if existing:
+        return existing
+    
+    record = DangerousDomain(
+        domain=domain,
+        source=source,
+        risk_level=risk_level,
+        timestamp=datetime.utcnow()
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def get_dangerous_domains(db, limit: int = 100):
+    """Get the list of dangerous domains."""
+    results = db.query(DangerousDomain).order_by(DangerousDomain.timestamp.desc()).limit(limit).all()
+    return [r.to_dict() for r in results]

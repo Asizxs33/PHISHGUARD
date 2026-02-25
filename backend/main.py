@@ -9,8 +9,10 @@ import io
 import numpy as np
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -21,7 +23,7 @@ from ml.heuristic_analyzer import analyze_url_heuristic, combine_scores
 from ml.page_analyzer import analyze_page_content
 from ml.phone_analyzer import analyze_phone as do_analyze_phone
 from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS
-from database import init_db, get_db, save_analysis, get_history, get_stats
+from database import init_db, get_db, save_analysis, get_history, get_stats, save_dangerous_domain, get_dangerous_domains
 
 # ─── Initialize App ──────────────────────────────────────────────────────
 
@@ -61,6 +63,7 @@ def startup():
 class UrlRequest(BaseModel):
     url: str = Field(..., min_length=3, description="URL to analyze")
     skip_db: bool = Field(default=False, description="Do not save this request to history")
+    html_content: Optional[str] = Field(default=None, description="Optional raw HTML content for deeper analysis")
 
 class EmailRequest(BaseModel):
     subject: str = Field(default="", description="Email subject")
@@ -453,7 +456,7 @@ def analyze_url(request: UrlRequest, db: Session = Depends(get_db)):
     
     # ── Step 1.5: Content Scraping Analysis ──
     try:
-        content_issues = analyze_page_content(request.url)
+        content_issues = analyze_page_content(request.url, provided_html=request.html_content)
         if content_issues:
             heuristic_issues.extend(content_issues)
             
@@ -523,6 +526,17 @@ def analyze_url(request: UrlRequest, db: Session = Depends(get_db)):
     # Save to history
     if not request.skip_db:
         save_analysis(db, 'url', request.url, final_score, final_verdict, json.dumps(combined_details))
+        
+        if final_verdict == "phishing":
+            try:
+                domain = urlparse(request.url).netloc
+                if not domain:
+                    domain = request.url.split('/')[0] if '://' not in request.url else request.url
+                domain = domain.split(':')[0]  # remove port
+                if domain:
+                    save_dangerous_domain(db, domain, source="url_check", risk_level=final_verdict)
+            except Exception as e:
+                print(f"Error saving dangerous domain: {e}")
 
     return AnalysisResponse(
         score=final_score,
@@ -663,6 +677,17 @@ def analyze_qr(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
         save_analysis(db, 'qr', decoded_url, final_score, final_verdict, json.dumps(combined_details))
 
+        if final_verdict == "phishing" and decoded_url:
+            try:
+                domain = urlparse(decoded_url).netloc
+                if not domain:
+                    domain = decoded_url.split('/')[0] if '://' not in decoded_url else decoded_url
+                domain = domain.split(':')[0]
+                if domain:
+                    save_dangerous_domain(db, domain, source="qr_check", risk_level=final_verdict)
+            except Exception as e:
+                print(f"Error saving dangerous domain: {e}")
+
         return {
             "decoded_url": decoded_url,
             "score": final_score,
@@ -711,6 +736,33 @@ def get_analysis_history(limit: int = 50, type: Optional[str] = None, db: Sessio
     return {"history": get_history(db, limit, type)}
 
 
+@app.get("/api/dangerous-domains")
+def api_get_dangerous_domains(limit: int = 100, db: Session = Depends(get_db)):
+    """Get the list of confirmed dangerous domains."""
+    return {"dangerous_domains": get_dangerous_domains(db, limit)}
+
+
+@app.get("/api/dangerous-domains/download", response_class=PlainTextResponse)
+def api_download_dangerous_domains(db: Session = Depends(get_db)):
+    """Download the list of confirmed dangerous domains as a text file."""
+    domains = get_dangerous_domains(db, 10000)
+    
+    lines = ["# CyberQalqan AI - Dangerous Domains List", 
+             f"# Generated: {datetime.utcnow().isoformat()}", 
+             "# Format: domain,source,risk_level",
+             ""]
+    
+    for d in domains:
+        lines.append(f"{d['domain']},{d['source']},{d['risk_level']}")
+        
+    content = "\n".join(lines)
+    
+    headers = {
+        "Content-Disposition": "attachment; filename=dangerous_domains.txt"
+    }
+    return PlainTextResponse(content=content, headers=headers)
+
+
 @app.get("/api/stats")
 def get_analysis_stats(db: Session = Depends(get_db)):
     """Get aggregate analysis statistics."""
@@ -753,6 +805,8 @@ def root():
             "POST /api/chat",
             "GET /api/chat/suggestions",
             "GET /api/history",
+            "GET /api/dangerous-domains",
+            "GET /api/dangerous-domains/download",
             "GET /api/stats"
         ]
     }

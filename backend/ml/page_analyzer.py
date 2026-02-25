@@ -88,9 +88,9 @@ def check_domain_osint(url: str) -> List[Dict[str, Any]]:
     return issues
 
 
-def analyze_page_content(url: str) -> List[Dict[str, Any]]:
+def analyze_page_content(url: str, provided_html: str = None) -> List[Dict[str, Any]]:
     """
-    Fetches the URL and analyzes its content.
+    Fetches the URL and analyzes its content, OR analyzes the provided HTML directly.
     Returns a list of issues found, similar to heuristic analyzer.
     """
     issues = []
@@ -103,21 +103,24 @@ def analyze_page_content(url: str) -> List[Dict[str, Any]]:
     if osint_issues:
         issues.extend(osint_issues)
 
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, verify=False)
-        response.raise_for_status()
-        
-        # FIX: Some phishing/casino sites (like sultan.egull.golf) do not send proper charset headers.
-        # requests defaults to ISO-8859-1 which corrupts Cyrillic characters.
-        # We force UTF-8 if the apparent encoding is different, or fallback to apparent.
-        if response.encoding and response.encoding.lower() == 'iso-8859-1':
-            response.encoding = response.apparent_encoding or 'utf-8'
+    if provided_html:
+        html_content = provided_html
+    else:
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, verify=False)
+            response.raise_for_status()
             
-        html_content = response.text
-    except Exception as e:
-        # We fail silently if we can't reach the page (maybe offline, maybe bot protection)
-        print(f"Content Analyzer: Could not fetch {url}: {e}")
-        return issues
+            # FIX: Some phishing/casino sites (like sultan.egull.golf) do not send proper charset headers.
+            # requests defaults to ISO-8859-1 which corrupts Cyrillic characters.
+            # We force UTF-8 if the apparent encoding is different, or fallback to apparent.
+            if response.encoding and response.encoding.lower() == 'iso-8859-1':
+                response.encoding = response.apparent_encoding or 'utf-8'
+                
+            html_content = response.text
+        except Exception as e:
+            # We fail silently if we can't reach the page (maybe offline, maybe bot protection)
+            print(f"Content Analyzer: Could not fetch {url}: {e}")
+            return issues
         
     soup = BeautifulSoup(html_content, 'html.parser')
     

@@ -229,7 +229,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [KeyboardButton("🔗 URL тексеру"), KeyboardButton("📧 Email тексеру")],
         [KeyboardButton("📷 QR код тексеру"), KeyboardButton("📱 Нөмірді тексеру")],
-        [KeyboardButton("💬 AI Кеңесші"), KeyboardButton("📊 Статистика"), KeyboardButton("📜 Тарих")],
+        [KeyboardButton("💬 AI Кеңесші"), KeyboardButton("📊 Статистика")],
+        [KeyboardButton("📜 Тарих"), KeyboardButton("🛑 Қауіпті домендер")],
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -243,7 +244,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📱 *Нөмірді тексеру* — телефон нөмірін алаяқтарға тексеру\n"
         "💬 *AI Кеңесші* — кибер қауіпсіздік бойынша кеңес\n"
         "📊 *Статистика* — жалпы талдау статистикасы\n"
-        "📜 *Тарих* — соңғы тексерулер\n\n"
+        "📜 *Тарих* — соңғы тексерулер\n"
+        "🛑 *Қауіпті домендер* — бұғатталған сайттар тізімі (жүктеу)\n\n"
         "Төмендегі батырмаларды қолданыңыз немесе тікелей сілтеме жіберіңіз! 👇",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=reply_markup
@@ -264,6 +266,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "  /phone — Телефон нөмірін тексеру\n"
         "  /stats — Статистика\n"
         "  /history — Тексерулер тарихы\n"
+        "  /domains — Қауіпті домендер тізімін жүктеп алу\n"
         "  /help — Көмек\n\n"
         "*Жылдам тексеру:*\n"
         "  Тікелей сілтемені жіберіңіз — бот тексереді!\n"
@@ -498,6 +501,31 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📜 Тарих бос — әлі тексеру жүргізілмеген.")
     else:
         await update.message.reply_text("❌ Тарихты жүктеу мүмкін болмады.")
+
+
+# ─── Download Dangerous Domains ──────────────────────────────────────────
+
+async def download_domains_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Download the dangerous domains list as a file."""
+    await update.message.chat.send_action(ChatAction.UPLOAD_DOCUMENT)
+    
+    url = f"{API_URL}/api/dangerous-domains/download"
+    client = await get_api_client()
+    try:
+        resp = await client.get(url)
+        if resp.status_code == 200:
+            file_content = resp.content
+            await update.message.reply_document(
+                document=file_content,
+                filename="dangerous_domains.txt",
+                caption="⚠️ *Қауіпті домендер тізімі*\n\nБұл файлда анықталған фишинг және қауіпті сайттар тізімі сақталған.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            await update.message.reply_text("❌ Файлды жүктеу мүмкін болмады. Сервер қатесі.")
+    except Exception as e:
+        logger.error(f"Failed to download domains: {e}")
+        await update.message.reply_text("❌ Қате пайда болды. Кейінірек қайталап көріңіз.")
 
 
 # ─── Phone Analysis ──────────────────────────────────────────────────────
@@ -784,6 +812,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("history", history_command))
+    app.add_handler(CommandHandler("domains", download_domains_command))
 
     # Conversation handlers
     url_conv = ConversationHandler(
@@ -833,6 +862,7 @@ def main():
     app.add_handler(CallbackQueryHandler(inline_button_handler))
     app.add_handler(MessageHandler(filters.Regex("^📊 Статистика$"), stats_command))
     app.add_handler(MessageHandler(filters.Regex("^📜 Тарих$"), history_command))
+    app.add_handler(MessageHandler(filters.Regex("^🛑 Қауіпті домендер$"), download_domains_command))
     app.add_handler(MessageHandler(filters.Regex("^💬 AI Кеңесші$"), ai_button_handler))
     app.add_handler(MessageHandler(filters.PHOTO, receive_qr_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_handler))

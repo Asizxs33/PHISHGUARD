@@ -13,6 +13,11 @@ function shouldIgnoreUrl(url) {
     return false;
 }
 
+// Function to extract HTML from the page
+function getHtmlContent() {
+    return document.documentElement.outerHTML;
+}
+
 // Function to analyze URL via PhishGuard backend
 async function analyzeUrl(url, tabId) {
     if (shouldIgnoreUrl(url)) return;
@@ -29,12 +34,31 @@ async function analyzeUrl(url, tabId) {
     }
 
     try {
+        let htmlContent = null;
+        try {
+            // Attempt to extract HTML from the page using scripting API
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: getHtmlContent
+            });
+            if (results && results[0] && results[0].result) {
+                htmlContent = results[0].result;
+            }
+        } catch (e) {
+            console.log("Could not extract HTML from tab:", e);
+        }
+
+        const requestBody = { url: url, skip_db: true };
+        if (htmlContent) {
+            requestBody.html_content = htmlContent;
+        }
+
         const response = await fetch(`${config.API_URL}/api/analyze-url`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ url: url, skip_db: true })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
