@@ -19,3 +19,7 @@ httpx==0.27.0
 python-dotenv==1.0.1
 pyzbar==0.1.9
 opencv-python==4.11.0.86
+g4f==7.2.5
+curl_cffi==0.14.0
+zendriver==0.15.2
+platformdirs==4.9.2
