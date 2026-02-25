@@ -24,3 +24,7 @@ curl_cffi==0.14.0
 zendriver==0.15.2
 platformdirs==4.9.2
 playwright==1.49.1
+SpeechRecognition==3.10.1
+pydub==0.25.1
+pytesseract==0.3.10
+

@@ -2,6 +2,29 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import api from '../api'
 
+// Leaflet
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
+
+// Fix Default Leaflet Icon Issue in React
+import iconMarker from 'leaflet/dist/images/marker-icon.png'
+import iconRetina from 'leaflet/dist/images/marker-icon-2x.png'
+import iconShadow from 'leaflet/dist/images/marker-shadow.png'
+
+const customIcon = L.icon({
+    iconRetinaUrl: iconRetina,
+    iconUrl: iconMarker,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    tooltipAnchor: [16, -28],
+    shadowSize: [41, 41]
+});
+L.Marker.prototype.options.icon = customIcon;
+
+
 export default function ThreatIntel() {
     const [domains, setDomains] = useState([])
     const [loading, setLoading] = useState(true)
@@ -13,7 +36,7 @@ export default function ThreatIntel() {
     const fetchDomains = async () => {
         try {
             setLoading(true)
-            const res = await api.get(`/api/dangerous-domains?limit=50`)
+            const res = await api.get(`/dangerous-domains?limit=50`)
             setDomains(res.data.dangerous_domains || [])
         } catch (error) {
             console.error("Failed to fetch dangerous domains", error)
@@ -118,6 +141,42 @@ export default function ThreatIntel() {
                     </div>
                 )}
             </div>
+
+            {/* Map Section */}
+            <div className="glass-panel p-6">
+                <h2 className="text-lg font-semibold text-white mb-4">Карта Угроз (Global Map)</h2>
+                <div className="h-[400px] w-full rounded-xl overflow-hidden border border-slate-700">
+                    <MapContainer center={[48.0196, 66.9237]} zoom={3} scrollWheelZoom={false} className="h-full w-full bg-slate-900">
+                        <TileLayer
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        {domains.map((item) => {
+                            let forensics = {}
+                            try {
+                                if (item.forensics_data) forensics = JSON.parse(item.forensics_data)
+                            } catch (e) { }
+
+                            const geo = forensics.geo_location || {}
+                            if (geo.lat && geo.lon) {
+                                return (
+                                    <Marker key={item.id} position={[geo.lat, geo.lon]}>
+                                        <Popup>
+                                            <div className="text-sm">
+                                                <strong className="text-red-600 block mb-1 font-mono">{item.domain}</strong>
+                                                <span className="block italic text-slate-500">{forensics.ip_address}</span>
+                                                <span className="block mt-1 font-semibold">{item.risk_level || 'CRITICAL'}</span>
+                                            </div>
+                                        </Popup>
+                                    </Marker>
+                                )
+                            }
+                            return null
+                        })}
+                    </MapContainer>
+                </div>
+            </div>
+
         </div>
     )
 }

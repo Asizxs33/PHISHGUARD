@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzbar0 \
     libgl1 \
     libglib2.0-0 \
+    ffmpeg \
+    tesseract-ocr \
+    tesseract-ocr-rus \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better Docker cache

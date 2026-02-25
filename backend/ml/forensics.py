@@ -30,6 +30,8 @@ def get_geo(ip: str) -> dict:
                 return {
                     "country": data.get("country"),
                     "city": data.get("city"),
+                    "lat": data.get("lat"),
+                    "lon": data.get("lon"),
                     "isp": data.get("isp"),
                     "org": data.get("org")
                 }

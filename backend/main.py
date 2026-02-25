@@ -22,7 +22,7 @@ from ml.classifier import PhishingClassifier
 from ml.heuristic_analyzer import analyze_url_heuristic, combine_scores
 from ml.page_analyzer import analyze_page_content
 from ml.phone_analyzer import analyze_phone as do_analyze_phone
-from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS
+from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS, analyze_call_transcript, analyze_image_text
 from ml.forensics import gather_forensics
 from database import init_db, get_db, save_analysis, get_history, get_stats, save_dangerous_domain, get_dangerous_domains, SessionLocal
 
@@ -730,6 +730,45 @@ def analyze_qr(background_tasks: BackgroundTasks, file: UploadFile = File(...), 
         raise HTTPException(status_code=500, detail=f"Error processing QR code: {str(e)}")
 
 
+@app.post("/api/analyze-image")
+def analyze_image(file: UploadFile = File(...)):
+    """Analyze an image (e.g. screenshot of a receipt or chat) for text-based scams using OCR."""
+    try:
+        from PIL import Image
+        import pytesseract
+        
+        image_data = file.file.read()
+        image = Image.open(io.BytesIO(image_data))
+        
+        # Convert to RGB if needed (e.g., if it's RGBA or P)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+            
+        # Extract text using Tesseract (trying Russian and English)
+        try:
+            # lang='rus+eng' handles Cyrillic and Latin alphabets common in Kazakhstan
+            extracted_text = pytesseract.image_to_string(image, lang='rus+eng')
+        except Exception as e:
+            print(f"pytesseract error: {e}")
+            raise HTTPException(status_code=500, detail="OCR processing failed. Ensure tesseract-ocr is installed on the system.")
+            
+        if not extracted_text or not extracted_text.strip():
+            raise HTTPException(status_code=422, detail="Суреттен мәтін табылмады / На фото не найдено текста.")
+            
+        # Analyze the extracted text using LLM
+        analysis_result = analyze_image_text(extracted_text)
+        
+        return {
+            "extracted_text": extracted_text,
+            "analysis": analysis_result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Analyze Image Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/analyze-phone", response_model=AnalysisResponse)
 def analyze_phone_endpoint(request: PhoneRequest, db: Session = Depends(get_db)):
     """Analyze a phone number for scam risks."""
@@ -752,6 +791,67 @@ def analyze_phone_endpoint(request: PhoneRequest, db: Session = Depends(get_db))
         detailed_analysis=detailed_analysis,
         timestamp=datetime.utcnow().isoformat()
     )
+
+
+@app.post("/api/analyze-audio")
+async def analyze_audio(file: UploadFile = File(...)):
+    """Analyze a voice message (.ogg or other) for vishing (Voice Phishing)."""
+    try:
+        import tempfile
+        import os
+        from pydub import AudioSegment
+        import speech_recognition as sr
+        
+        fd, temp_path = tempfile.mkstemp(suffix=".ogg")
+        with os.fdopen(fd, 'wb') as f:
+            f.write(await file.read())
+            
+        wav_path = temp_path + ".wav"
+        try:
+            audio = AudioSegment.from_file(temp_path)
+            audio.export(wav_path, format="wav")
+        except Exception as e:
+            print(f"Audio conversion error: {e}")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise HTTPException(status_code=400, detail="Could not process audio file format.")
+            
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio_data = recognizer.record(source)
+            
+        transcript = ""
+        try:
+            try:
+                transcript = recognizer.recognize_google(audio_data, language="ru-RU")
+            except sr.UnknownValueError:
+                transcript = recognizer.recognize_google(audio_data, language="kk-KZ")
+        except sr.UnknownValueError:
+            raise HTTPException(status_code=422, detail="Дауыс танылмады / Голос не распознан. Текст не найден.")
+        except sr.RequestError as e:
+            print(f"Speech Recognition API Error: {e}")
+            raise HTTPException(status_code=503, detail="Speech Recognition service unavailable.")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            if os.path.exists(wav_path):
+                os.remove(wav_path)
+            
+        if not transcript.strip():
+            raise HTTPException(status_code=422, detail="Empty transcript.")
+            
+        analysis_result = analyze_call_transcript(transcript)
+        
+        return {
+            "transcript": transcript,
+            "analysis": analysis_result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Analyze Audio Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/history")

@@ -401,8 +401,8 @@ async def qr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_QR
 
 
-async def receive_qr_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive QR photo and analyze."""
+async def receive_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Receive photo: 1. Try QR analysis. 2. If no QR, try text OCR analysis."""
     if update.message.photo:
         photo = update.message.photo[-1]
     elif update.message.document:
@@ -412,27 +412,58 @@ async def receive_qr_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_QR
 
     await update.message.chat.send_action(ChatAction.TYPING)
-    msg = await update.message.reply_text("🔍 QR-код тексерілуде...\n⏳ Күте тұрыңыз...")
+    msg = await update.message.reply_text("🔍 Суретті тексеріп жатырмын...\n⏳ Күте тұрыңыз...")
 
     file = await photo.get_file()
     photo_bytes = await file.download_as_bytearray()
 
-    result = await api_request(
+    # 1. Try QR Code Analysis First
+    qr_result = await api_request(
         "POST", "/api/analyze-qr",
         files={"file": ("qr.png", io.BytesIO(photo_bytes), "image/png")}
     )
 
-    if result:
-        decoded_url = result.get("decoded_url", "белгісіз")
+    if qr_result:
+        decoded_url = qr_result.get("decoded_url", "белгісіз")
         safe_url = escape_md(decoded_url[:60])
         header = f"📷 *QR Код Талдау*\n  Сілтеме: {safe_url}\n\n"
-        text = header + format_analysis_result(result, "QR")
+        text = header + format_analysis_result(qr_result, "QR")
         try:
             await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
         except Exception:
             await msg.edit_text(text.replace("*", ""))
+        return ConversationHandler.END
+
+    # 2. If NO QR code found, try OCR Image Text Analysis
+    msg = await msg.edit_text("🔍 QR-код табылмады. Суреттегі мәтінді оқуға көштім (OCR)...\n⏳ Күте тұрыңыз...")
+    
+    ocr_result = await api_request(
+        "POST", "/api/analyze-image",
+        files={"file": ("image.jpg", io.BytesIO(photo_bytes), "image/jpeg")}
+    )
+    
+    if ocr_result:
+        extracted = ocr_result.get("extracted_text", "")
+        analysis = ocr_result.get("analysis", {}).get("answer", {})
+        
+        if isinstance(analysis, dict):
+            ai_text = analysis.get("kz", analysis.get("ru", analysis.get("en", "..."))).strip()
+        else:
+            ai_text = str(analysis).strip()
+            
+        ai_text = escape_md(ai_text)
+        
+        # Don't show the whole extracted text to the user, just a snippet to not spam
+        snippet = extracted[:150].replace('\n', ' ') + "..." if len(extracted) > 150 else extracted.replace('\n', ' ')
+        safe_snippet = escape_md(snippet)
+        
+        text = f"🖼️ *Суреттен оқылған мәтін:*\n_{safe_snippet}_\n\n🤖 *CyberQalqan AI:*\n{ai_text}"
+        try:
+            await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            await msg.edit_text(text.replace("*", "").replace("_", ""))
     else:
-        await msg.edit_text("❌ QR-код оқылмады!\nСурет сапасын тексеріңіз немесе басқа фото жіберіңіз.")
+        await msg.edit_text("❌ QR-код немесе түсінікті мәтін табылмады!\nСурет сапасын тексеріп қайта жіберіңіз.")
 
     return ConversationHandler.END
 
@@ -816,6 +847,50 @@ async def inline_button_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 await query.message.reply_text(f"🤖 CyberQalqan AI:\n\n{response_text}")
 
 
+# ─── Voice / Audio Analysis ──────────────────────────────────────────────
+
+async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle voice messages and send them for transcription and vishing analysis."""
+    if not update.message or (not update.message.voice and not update.message.audio):
+        return
+
+    await update.message.chat.send_action(ChatAction.RECORD_VOICE)
+    msg = await update.message.reply_text("🎙️ Дауыстық хабарлама сарапталуда...\n\n⏳ Күте тұрыңыз...")
+
+    try:
+        audio_file = update.message.voice or update.message.audio
+        file = await audio_file.get_file()
+        audio_bytes = await file.download_as_bytearray()
+        
+        result = await api_request(
+            "POST", "/api/analyze-audio",
+            files={"file": ("voice.ogg", io.BytesIO(audio_bytes), "audio/ogg")}
+        )
+        
+        if result:
+            transcript = result.get("transcript", "")
+            analysis = result.get("analysis", {}).get("answer", {})
+            
+            if isinstance(analysis, dict):
+                ai_text = analysis.get("kz", analysis.get("ru", analysis.get("en", "..."))).strip()
+            else:
+                ai_text = str(analysis).strip()
+                
+            ai_text = escape_md(ai_text)
+            safe_transcript = escape_md(transcript[:500])
+            
+            text = f"🎙️ *Транскрипция:*\n_{safe_transcript}_\n\n🤖 *CyberQalqan AI:*\n{ai_text}"
+            try:
+                await msg.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+            except Exception:
+                await msg.edit_text(text.replace("*", "").replace("_", ""))
+        else:
+            await msg.edit_text("❌ Кешіріңіз, дауыстық хабарламаны сараптау мүмкін болмады.")
+    except Exception as e:
+        logger.error(f"Voice handling error: {e}")
+        await msg.edit_text("⚠️ Сервер қатесі. Кейінірек қайталап көріңіз.")
+
+
 # ─── Cancel & Error ──────────────────────────────────────────────────────
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -887,7 +962,7 @@ def main():
             CommandHandler("qr", qr_command),
             MessageHandler(filters.Regex("^📷 QR код тексеру$"), qr_command),
         ],
-        states={WAITING_QR: [MessageHandler(filters.PHOTO | filters.Document.IMAGE, receive_qr_photo)]},
+        states={WAITING_QR: [MessageHandler(filters.PHOTO | filters.Document.IMAGE, receive_photo)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(qr_conv)
@@ -907,7 +982,8 @@ def main():
     app.add_handler(MessageHandler(filters.Regex("^📜 Тарих$"), history_command))
     app.add_handler(MessageHandler(filters.Regex("^🛑 Қауіпті домендер$"), download_domains_command))
     app.add_handler(MessageHandler(filters.Regex("^💬 AI Кеңесші$"), ai_button_handler))
-    app.add_handler(MessageHandler(filters.PHOTO, receive_qr_photo))
+    app.add_handler(MessageHandler(filters.PHOTO, receive_photo))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, voice_handler))
     app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND, chat_handler))
 
     app.add_error_handler(error_handler)
