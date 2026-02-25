@@ -9,6 +9,7 @@ import History from './pages/History'
 import CyberChat from './pages/CyberChat'
 import CyberTraining from './pages/CyberTraining'
 import Landing from './pages/Landing'
+import ThreatIntel from './pages/ThreatIntel'
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/history" element={<Layout><History /></Layout>} />
         <Route path="/chat" element={<Layout><CyberChat /></Layout>} />
         <Route path="/training" element={<Layout><CyberTraining /></Layout>} />
+        <Route path="/threat-intel" element={<Layout><ThreatIntel /></Layout>} />
       </Routes>
     </Router>
   )

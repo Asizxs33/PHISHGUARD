@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -23,7 +23,24 @@ from ml.heuristic_analyzer import analyze_url_heuristic, combine_scores
 from ml.page_analyzer import analyze_page_content
 from ml.phone_analyzer import analyze_phone as do_analyze_phone
 from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS
-from database import init_db, get_db, save_analysis, get_history, get_stats, save_dangerous_domain, get_dangerous_domains
+from ml.forensics import gather_forensics
+from database import init_db, get_db, save_analysis, get_history, get_stats, save_dangerous_domain, get_dangerous_domains, SessionLocal
+
+def process_forensics_task(domain: str, source: str, risk_level: str):
+    try:
+        db = SessionLocal()
+        forensics_data = None
+        try:
+            f_dict = gather_forensics(domain)
+            if f_dict:
+                forensics_data = json.dumps(f_dict)
+        except Exception as e:
+            print(f"Process Forensics Error: {e}")
+            
+        save_dangerous_domain(db, domain, source=source, risk_level=risk_level, forensics_data=forensics_data)
+        db.close()
+    except Exception as e:
+        print(f"Background forensics task failed: {e}")
 
 # ─── Initialize App ──────────────────────────────────────────────────────
 
@@ -174,6 +191,13 @@ def generate_detailed_analysis(features: dict, analysis_type: str, heuristic_iss
                         "kz": "⚠️ Бұл сайт күдікті жерде сізден құпиясөз, карта мәліметтері немесе жеке деректерді сұрап тұр. Бұл — фишинг (алдау) белгісі.",
                         "ru": "⚠️ Сайт просит ввести пароль, данные карты или личную информацию в подозрительном контексте. Это явный признак фишинга!",
                         "en": "⚠️ The site is asking for passwords, card details, or sensitive personal info in a suspicious context. High phishing risk!"
+                    })
+
+                elif issue_type == 'financial_pyramid_content':
+                    details.append({
+                        "kz": "📈 ЭКОНОМИКАЛЫҚ ҚАУІП: Бұл сайт өте жоғары табыс немесе мемлекеттік инвестициялық платформаны (мысалы, 'ҚазМұнайГаз', 'Halyk Invest') уәде етеді. Бұл қаржылық пирамида немесе инвестициялық алаяқтық болуы әбден мүмкін!",
+                        "ru": "📈 ЭКОНОМИЧЕСКАЯ УГРОЗА: Сайт обещает нереально высокий доход или притворяется государственной инвестиционной платформой (например, 'КазМунайГаз' или 'Halyk Invest'). Скорее всего, это финансовая пирамида или мошенники!",
+                        "en": "📈 ECONOMIC THREAT: This site promises unrealistically high returns or fakes a state investment platform. This is highly likely a financial pyramid or investment scam!"
                     })
 
                 elif issue_type == 'external_form_action':
@@ -447,7 +471,7 @@ def get_risk_level(score: float) -> str:
 # ─── API Endpoints ───────────────────────────────────────────────────────
 
 @app.post("/api/analyze-url", response_model=AnalysisResponse)
-def analyze_url(request: UrlRequest, db: Session = Depends(get_db)):
+def analyze_url(request: UrlRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Analyze a URL for phishing indicators using ML + Heuristic ensemble + Content Scraping."""
 
     # ── Step 1: Heuristic Analysis (always available, no model needed) ──
@@ -534,7 +558,7 @@ def analyze_url(request: UrlRequest, db: Session = Depends(get_db)):
                     domain = request.url.split('/')[0] if '://' not in request.url else request.url
                 domain = domain.split(':')[0]  # remove port
                 if domain:
-                    save_dangerous_domain(db, domain, source="url_check", risk_level=final_verdict)
+                    background_tasks.add_task(process_forensics_task, domain, "url_check", final_verdict)
             except Exception as e:
                 print(f"Error saving dangerous domain: {e}")
 
@@ -581,7 +605,7 @@ def analyze_email(request: EmailRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/analyze-qr")
-def analyze_qr(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def analyze_qr(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Analyze a QR code image for phishing URLs."""
     try:
         from PIL import Image
@@ -684,7 +708,7 @@ def analyze_qr(file: UploadFile = File(...), db: Session = Depends(get_db)):
                     domain = decoded_url.split('/')[0] if '://' not in decoded_url else decoded_url
                 domain = domain.split(':')[0]
                 if domain:
-                    save_dangerous_domain(db, domain, source="qr_check", risk_level=final_verdict)
+                    background_tasks.add_task(process_forensics_task, domain, "qr_check", final_verdict)
             except Exception as e:
                 print(f"Error saving dangerous domain: {e}")
 
@@ -740,6 +764,63 @@ def get_analysis_history(limit: int = 50, type: Optional[str] = None, db: Sessio
 def api_get_dangerous_domains(limit: int = 100, db: Session = Depends(get_db)):
     """Get the list of confirmed dangerous domains."""
     return {"dangerous_domains": get_dangerous_domains(db, limit)}
+
+
+@app.get("/api/admin/forensics/{domain}/report", response_class=PlainTextResponse)
+def get_forensic_report(domain: str, db: Session = Depends(get_db)):
+    """Generate a downloadable forensic report for law enforcement."""
+    from database import DangerousDomain
+    record = db.query(DangerousDomain).filter(DangerousDomain.domain == domain).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Domain not found in dangerous list")
+        
+    report = [
+        "===========================================================",
+        "        CYBERQALQAN AI - DIGITAL FORENSICS REPORT",
+        "===========================================================",
+        f"Generated At: {datetime.utcnow().isoformat()} UTC",
+        f"Target Domain: {record.domain}",
+        f"Risk Level: {record.risk_level.upper() if record.risk_level else 'UNKNOWN'}",
+        f"Detection Source: {record.source}",
+        f"First Detected: {record.timestamp.isoformat() if record.timestamp else 'Unknown'}",
+        "-----------------------------------------------------------"
+    ]
+    
+    if record.forensics_data:
+        try:
+            f_data = json.loads(record.forensics_data)
+            ip = f_data.get('ip_address', 'Unknown')
+            report.append(f"IP Address: {ip}")
+            
+            geo = f_data.get('geo_location', {})
+            country = geo.get('country', 'Unknown')
+            city = geo.get('city', 'Unknown')
+            isp = geo.get('isp', 'Unknown')
+            report.append(f"Location: {city}, {country}")
+            report.append(f"ISP / Host: {isp}")
+            
+            ports = f_data.get('open_ports', [])
+            report.append(f"Open Ports: {', '.join(map(str, ports))}")
+            
+            ssl_info = f_data.get('ssl_certificate')
+            if ssl_info:
+                report.append("SSL Certificate:")
+                report.append(f"  Issuer: {ssl_info.get('issuer')}")
+                report.append(f"  Expires: {ssl_info.get('notAfter')}")
+        except:
+            report.append("Forensics data corrupted or unreadable.")
+    else:
+        report.append("Forensics data not available (gathering failed or pending).")
+        
+    report.append("===========================================================")
+    report.append("This report was automatically generated by CyberQalqan AI.")
+    report.append("Data is collected from public OPSEC sources and port scanning.")
+    
+    content = "\n".join(report)
+    headers = {
+        "Content-Disposition": f"attachment; filename=forensic_report_{domain}.txt"
+    }
+    return PlainTextResponse(content=content, headers=headers)
 
 
 @app.get("/api/dangerous-domains/download", response_class=PlainTextResponse)

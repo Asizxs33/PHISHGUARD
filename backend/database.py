@@ -68,6 +68,7 @@ class DangerousDomain(Base):
     domain = Column(String(255), nullable=False, unique=True)
     source = Column(String(50), default="user_check")  # e.g., user_check, telegram_bot
     risk_level = Column(String(20), nullable=True)     # e.g., phishing, critical
+    forensics_data = Column(Text, nullable=True)       # JSON string of gathered forensics
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -76,6 +77,7 @@ class DangerousDomain(Base):
             'domain': self.domain,
             'source': self.source,
             'risk_level': self.risk_level,
+            'forensics_data': self.forensics_data,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }
 
@@ -145,17 +147,22 @@ def get_stats(db):
     }
 
 
-def save_dangerous_domain(db, domain: str, source: str = "user_check", risk_level: str = "phishing"):
+def save_dangerous_domain(db, domain: str, source: str = "user_check", risk_level: str = "phishing", forensics_data: str = None):
     """Save a confirmed dangerous domain to the database."""
     # Check if domain already exists
     existing = db.query(DangerousDomain).filter(DangerousDomain.domain == domain).first()
     if existing:
+        if forensics_data and not existing.forensics_data:
+            existing.forensics_data = forensics_data
+            db.commit()
+            db.refresh(existing)
         return existing
     
     record = DangerousDomain(
         domain=domain,
         source=source,
         risk_level=risk_level,
+        forensics_data=forensics_data,
         timestamp=datetime.utcnow()
     )
     db.add(record)

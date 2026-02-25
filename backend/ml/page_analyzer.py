@@ -40,6 +40,15 @@ PHISHING_KEYWORDS = [
     r'\bsocial security number\b', r'\bобновить данные\b', r'\bштраф оплатить\b'
 ]
 
+PYRAMID_KEYWORDS = [
+    r'\bгарантированный доход\b', r'\bинвестируй и зарабатывай\b', r'\bпассивный заработок\b',
+    r'\bказмунайгаз инвестиции\b', r'\bhalyk invest\b', r'\bхалык инвест\b',
+    r'\bдоход от \d+%\b', r'\bбез рисков\b', r'\bбыстрый заработок\b',
+    r'\bвложи \d+\b', r'\bполучи \d+\b', r'\bзаработок в интернете\b',
+    r'\bфинансовая независимость\b', r'\bуникальный алгоритм\b', r'\bгосударственная платформа\b',
+    r'\bнациональная платформа\b', r'\bакции газпром\b', r'\bтенир инвест\b'
+]
+
 
 # Global cache for OSINT feeds
 _OSINT_CACHE = []
@@ -203,6 +212,25 @@ def analyze_page_content(url: str, provided_html: str = None) -> List[Dict[str, 
             'type': 'phishing_content',
             'severity': 0.50,
             'detail': f'Page asks for sensitive info or login: {found_phishing[0]}',
+        })
+        
+    # 2.5 Search for Financial Pyramid / Fake Investment Keywords
+    found_pyramid = []
+    for pattern in PYRAMID_KEYWORDS:
+        if re.search(pattern, full_text_to_search):
+            found_pyramid.append(pattern.replace(r'\b', '').replace('\\d+', 'NUMBER'))
+            
+    if len(found_pyramid) >= 2:
+        issues.append({
+            'type': 'financial_pyramid_content',
+            'severity': 0.95,
+            'detail': f'Page contains strong indicators of fake investments or financial pyramids: {", ".join(found_pyramid[:3])}',
+        })
+    elif len(found_pyramid) == 1:
+         issues.append({
+            'type': 'financial_pyramid_content',
+            'severity': 0.65,
+            'detail': f'Page contains investment promises often used by scammers: {found_pyramid[0]}',
         })
         
         

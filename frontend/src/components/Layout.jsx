@@ -10,6 +10,7 @@ const navItems = [
     { path: '/chat', icon: '💬', label: 'Кибер кеңесші', tag: 'AI CHAT' },
     { path: '/training', icon: '🎯', label: 'Тренажер', tag: 'CYBER GAME' },
     { path: '/history', icon: '◎', label: 'Тарих', tag: 'HISTORY' },
+    { path: '/threat-intel', icon: '🛡️', label: 'МВД базасы', tag: 'THREAT INTEL' },
 ]
 
 export default function Layout({ children }) {
