@@ -551,25 +551,141 @@ async def _analyze_phone(update: Update, context: ContextTypes.DEFAULT_TYPE, pho
         )
 
 
-# ─── AI Chat ─────────────────────────────────────────────────────────────
+# ─── AI Chat & Group Link Moderation ─────────────────────────────────────
+
+import re
+
+# Regex to find URLs anywhere in the text
+URL_REGEX = re.compile(r'(https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?)')
+
+def extract_urls(text: str) -> List[str]:
+    """Finds all URLs in a given text message."""
+    if not text:
+        return []
+    
+    urls = URL_REGEX.findall(text)
+    # Filter out common false positives like "file.txt" or punctuation
+    clean_urls = []
+    for u in urls:
+        u = u.rstrip(".,;!?()[]{}'\"")
+        if '.' in u and len(u) > 4:
+            # prepend http if missing so our backend handles it properly
+            if not u.startswith(('http://', 'https://')):
+                u = 'http://' + u
+            clean_urls.append(u)
+    return list(set(clean_urls))
+
+
+async def process_urls_in_background(update: Update, context: ContextTypes.DEFAULT_TYPE, urls: List[str]):
+    """Background task to analyze URLs and delete message if malicious."""
+    for url in urls:
+        try:
+            # 1. Ask our backend API
+            result = await api_request("POST", "/api/analyze-url", json={"url": url})
+            if not result:
+                continue
+                
+            # 2. Check if dangerous
+            verdict = result.get("verdict", "safe")
+            risk = result.get("risk_level", "low")
+            score = result.get("score", 0.0)
+            
+            is_malicious = False
+            reason_text = ""
+            
+            # Analyze detailed issues to generate specific punishment reasons
+            details = result.get("detailed_analysis", [])
+            details_str = str(details).lower()
+            
+            if verdict == "phishing" or risk in ["critical", "high"] or score > 0.75:
+                is_malicious = True
+                
+                # Determine the exact reason for the warning message based on our new backend checks
+                if "казино" in details_str or "casino" in details_str or "құмар" in details_str:
+                    reason_text = "🎰 Реклама онлайн-казино / азартных игр"
+                elif "openphish" in details_str or "osint" in details_str:
+                    reason_text = "🚨 Сайт находится в глобальном черном списке мошенников (OSINT)"
+                elif "фишинг" in details_str or "phishing" in details_str or "карта" in details_str or "cvv" in details_str or "external domain" in details_str:
+                    reason_text = "🎣 Сбор паролей или данных карт (Фишинг)"
+                elif "iframe" in details_str or "редирект" in details_str or "redirect" in details_str:
+                    reason_text = "🔀 Скрытый редирект или опасный iframe"
+                else:
+                    reason_text = "⚠️ Вредоносная или опасная ссылка"
+
+            # 3. Take action
+            if is_malicious:
+                logger.info(f"Detected malicious URL ({verdict} / {score}) in group message: {url}")
+                try:
+                    # Try to delete the message (needs Admin rights)
+                    if update.message:
+                        await update.message.delete()
+                        
+                        # Send public warning
+                        user = update.message.from_user
+                        username = user.username if getattr(user, 'username', None) else "Пользователь"
+                        user_mention = f"@{username}" if username != "Пользователь" else getattr(user, 'first_name', 'Неизвестный')
+                        
+                        warning_text = (
+                            f"🛡 <b>CyberQalqan AI Security</b>\n\n"
+                            f"Удалено сообщение от {user_mention}, так как оно содержало опасную ссылку.\n"
+                            f"<b>Обнаружено:</b> {reason_text}\n\n"
+                            f"<i>Система автоматически модерирует опасный контент.</i>"
+                        )
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id, 
+                            text=warning_text, 
+                            parse_mode=ParseMode.HTML
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to delete message/send warning: {e}")
+                
+                # Stop checking other URLs in this same message once we found a bad one
+                break
+                
+        except Exception as e:
+            logger.error(f"Background URL processing error: {e}")
 
 async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle AI cybersecurity chat."""
+    """Handle general text. Checks for links first, if none, treats as AI chat."""
+    if not update.message or not update.message.text:
+        return
+        
     text = update.message.text.strip()
 
-    # Auto-detect URLs
-    if text.startswith(("http://", "https://", "www.")):
-        await _analyze_url(update, context, text)
-        return
+    # 1. Search for ANY URLs anywhere in the text (for groups)
+    urls = extract_urls(text)
+    
+    if urls:
+        # If it's a private chat and someone just sent a direct link, reply with analysis
+        if update.effective_chat.type == "private" and text.startswith(("http://", "https://", "www.")) and len(text.split()) == 1:
+            await _analyze_url(update, context, text)
+            return
+            
+        # For groups OR messages that contain text + links, run moderation in background
+        asyncio.create_task(process_urls_in_background(update, context, urls))
+        
+        # If the bot is in a group, we shouldn't respond to general text with AI chat unless explicitly tagged
+        if update.effective_chat.type in ["group", "supergroup"]:
+            return
 
-    # Auto-detect phone numbers
-    import re
+    # If it's a group, only respond to AI chat if the bot is specifically mentioned
+    if update.effective_chat.type in ["group", "supergroup"]:
+        # simple check: if bot username is not in text, do nothing
+        bot_info = await context.bot.get_me()
+        bot_username = f"@{bot_info.username}"
+        if bot_username not in text:
+            return
+        # remove bot username from the prompt
+        text = text.replace(bot_username, "").strip()
+
+    # Auto-detect phone numbers (only in private chat usually)
     digits = re.sub(r'\D', '', text)
     is_mostly_digits = len(text) > 0 and (sum(c.isdigit() for c in text) / len(text)) > 0.5
     if (text.startswith('+') and len(digits) >= 10) or (len(digits) >= 10 and len(digits) <= 15 and is_mostly_digits):
         await _analyze_phone(update, context, text)
         return
 
+    # Call AI Advisor
     await update.message.chat.send_action(ChatAction.TYPING)
     result = await api_request("POST", "/api/chat", json={"message": text})
 
@@ -587,7 +703,6 @@ async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"🤖 CyberQalqan AI:\n\n{response_text}")
     else:
         await update.message.reply_text("❌ AI кеңесшіге қосылу мүмкін болмады.\nСервер ояну үшін 1-2 минут күтіңіз.")
-
 
 # ─── Button Handlers ─────────────────────────────────────────────────────
 

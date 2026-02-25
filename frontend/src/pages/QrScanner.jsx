@@ -11,6 +11,7 @@ export default function QrScanner() {
     const [result, setResult] = useState(null)
     const [error, setError] = useState('')
     const [dragOver, setDragOver] = useState(false)
+    const [scanStep, setScanStep] = useState(-1)
     const fileInputRef = useRef(null)
 
     const handleFileChange = (e) => {
@@ -26,19 +27,75 @@ export default function QrScanner() {
 
     const handleAnalyzeQr = async () => {
         if (!file) return
-        setLoading(true); setError(''); setResult(null); setDecodedUrl('')
-        try { const d = await analyzeQr(file); setDecodedUrl(d.decoded_url || ''); setResult(d) }
-        catch (err) { setError(err.response?.data?.detail || 'QR кодты декодтау мүмкін болмады') }
-        setLoading(false)
+        setLoading(true); setError(''); setResult(null); setDecodedUrl(''); setScanStep(0);
+
+        const steps = 4;
+        const stepDuration = 800; // 800ms per step
+
+        const animationInterval = setInterval(() => {
+            setScanStep(prev => {
+                if (prev >= steps - 1) {
+                    clearInterval(animationInterval);
+                    return prev;
+                }
+                return prev + 1;
+            });
+        }, stepDuration);
+
+        const minDelay = new Promise(resolve => setTimeout(resolve, steps * stepDuration));
+
+        try {
+            const apiPromise = analyzeQr(file);
+            const [d] = await Promise.all([apiPromise, minDelay]);
+            setDecodedUrl(d.decoded_url || '');
+            setResult(d);
+        } catch (err) {
+            setError(err.response?.data?.detail || 'QR кодты декодтау мүмкін болмады')
+        } finally {
+            clearInterval(animationInterval);
+            setLoading(false);
+            setScanStep(-1);
+        }
     }
 
     const handleAnalyzeUrl = async () => {
         if (!decodedUrl.trim()) return
-        setLoading(true); setError(''); setResult(null)
-        try { setResult(await analyzeUrl(decodedUrl.trim())) }
-        catch (err) { setError(err.response?.data?.detail || 'Талдау мүмкін болмады') }
-        setLoading(false)
+        setLoading(true); setError(''); setResult(null); setScanStep(1);
+
+        const steps = 4;
+        const stepDuration = 800;
+
+        const animationInterval = setInterval(() => {
+            setScanStep(prev => {
+                if (prev >= steps - 1) {
+                    clearInterval(animationInterval);
+                    return prev;
+                }
+                return prev + 1;
+            });
+        }, stepDuration);
+
+        const minDelay = new Promise(resolve => setTimeout(resolve, steps * stepDuration));
+
+        try {
+            const apiPromise = analyzeUrl(decodedUrl.trim());
+            const [apiResult] = await Promise.all([apiPromise, minDelay]);
+            setResult(apiResult);
+        } catch (err) {
+            setError(err.response?.data?.detail || 'Талдау мүмкін болмады')
+        } finally {
+            clearInterval(animationInterval);
+            setLoading(false);
+            setScanStep(-1);
+        }
     }
+
+    const scanStepsUI = [
+        { icon: '📷', text: 'Суреттен QR кодты декодтау...' },
+        { icon: '🔄', text: 'Жасырын сілтемеге қосылу...' },
+        { icon: '👁️', text: 'Мазмұнды сканерлеу (HTML/Text)...' },
+        { icon: '🧠', text: 'ML нейрожелісі бойынша бағалау...' },
+    ]
 
     return (
         <div>
@@ -143,10 +200,38 @@ export default function QrScanner() {
             )}
 
             {loading && (
-                <div className="glass rounded-2xl p-8 text-center fade-up">
-                    <div className="shimmer mb-6 mx-auto max-w-[350px]"></div>
-                    <div className="text-cyan-400 font-bold tracking-wide text-sm">QR КОДТЫ ӨҢДЕУ ЖҮРГІЗІЛУДЕ</div>
-                    <div className="text-slate-600 text-xs font-mono mt-2 cursor-blink">decode → extract_url → analyze</div>
+                <div className="glass glow-border rounded-2xl p-8 mb-6 fade-up">
+                    <div className="flex flex-col items-center justify-center">
+                        <div className="relative w-16 h-16 mb-6">
+                            <div className="absolute inset-0 border-4 border-cyan-500/20 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-cyan-500 rounded-full border-t-transparent animate-spin"></div>
+                            <div className="absolute inset-0 flex items-center justify-center text-2xl">
+                                {scanStep >= 0 && scanStepsUI[Math.min(scanStep, scanStepsUI.length - 1)].icon}
+                            </div>
+                        </div>
+
+                        <h3 className="text-xl font-bold text-white mb-6 tracking-wide">QR КОДТЫ ӨҢДЕУДЕ...</h3>
+
+                        <div className="w-full max-w-sm space-y-4">
+                            {scanStepsUI.map((step, index) => (
+                                <div key={index} className={`flex items-center gap-4 transition-all duration-500 
+                                    ${index === scanStep ? 'opacity-100 translate-x-0' :
+                                        index < scanStep ? 'opacity-50 translate-x-0' : 'opacity-20 translate-x-4'}`}>
+                                    <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-sm
+                                        ${index < scanStep ? 'bg-emerald-500/20 text-emerald-400' :
+                                            index === scanStep ? 'bg-cyan-500/20 text-cyan-400 animate-pulse shadow-[0_0_15px_rgba(6,182,212,0.5)]' :
+                                                'bg-slate-800 text-slate-500'}`}>
+                                        {index < scanStep ? '✓' : index + 1}
+                                    </div>
+                                    <span className={`text-sm font-medium
+                                        ${index === scanStep ? 'text-cyan-300' :
+                                            index < scanStep ? 'text-emerald-400/70' : 'text-slate-500'}`}>
+                                        {step.text}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             )}
 

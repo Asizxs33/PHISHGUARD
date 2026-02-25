@@ -81,14 +81,20 @@ export default function Layout({ children }) {
                         </NavLink>
                     ))}
 
-                    <div className="pt-4 pb-2 px-4">
-                        <div className="h-px bg-indigo-500/10 w-full mb-4" />
+                    <div className="pt-4 pb-2 px-4 space-y-2">
+                        <div className="h-px bg-indigo-500/10 w-full mb-3" />
                         <a href="https://t.me/CyberQalqanBot" target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm text-cyan-400 bg-cyan-500/5 
+                            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-cyan-400 bg-cyan-500/5 
                                 border border-cyan-500/10 hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all group">
                             <span className="text-lg group-hover:scale-110 transition-transform">✈</span>
                             <span className="flex-1 font-semibold">Telegram Bot</span>
                             <span className="text-[0.6rem] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded uppercase tracking-wider">Join</span>
+                        </a>
+                        <a href="/CyberQalqan_Extension.zip" download="CyberQalqan_Extension.zip"
+                            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-purple-400 bg-purple-500/5 
+                                border border-purple-500/10 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all group">
+                            <span className="text-lg group-hover:scale-110 transition-transform">🧩</span>
+                            <span className="flex-1 font-semibold">Кеңейтімді жүктеу</span>
                         </a>
                     </div>
                 </nav>

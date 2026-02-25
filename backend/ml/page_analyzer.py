@@ -106,6 +106,13 @@ def analyze_page_content(url: str) -> List[Dict[str, Any]]:
     try:
         response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, verify=False)
         response.raise_for_status()
+        
+        # FIX: Some phishing/casino sites (like sultan.egull.golf) do not send proper charset headers.
+        # requests defaults to ISO-8859-1 which corrupts Cyrillic characters.
+        # We force UTF-8 if the apparent encoding is different, or fallback to apparent.
+        if response.encoding and response.encoding.lower() == 'iso-8859-1':
+            response.encoding = response.apparent_encoding or 'utf-8'
+            
         html_content = response.text
     except Exception as e:
         # We fail silently if we can't reach the page (maybe offline, maybe bot protection)

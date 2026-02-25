@@ -54,6 +54,9 @@ export default function Landing() {
                         <a href="https://t.me/CyberQalqanBot" target="_blank" rel="noopener noreferrer" className="hidden sm:flex text-sm font-semibold text-slate-400 hover:text-cyan-400 transition-colors">
                             Telegram Bot
                         </a>
+                        <a href="/CyberQalqan_Extension.zip" download="CyberQalqan_Extension.zip" className="hidden lg:flex text-sm font-semibold text-slate-400 hover:text-purple-400 transition-colors">
+                            Кеңейтім
+                        </a>
                         <Link to="/dashboard" className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] border border-indigo-400/50">
                             Жүйеге кіру
                         </Link>
@@ -87,6 +90,9 @@ export default function Landing() {
                         <Link to="/dashboard" className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-indigo-600/90 backdrop-blur-md border border-indigo-400/30 text-white font-bold text-base hover:bg-indigo-500 hover:-translate-y-0.5 transition-all shadow-[0_5px_20px_-5px_rgba(99,102,241,0.5)]">
                             Талдауды бастау →
                         </Link>
+                        <a href="/CyberQalqan_Extension.zip" download="CyberQalqan_Extension.zip" className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-purple-500/10 backdrop-blur-md border border-purple-500/30 text-purple-300 font-bold text-base hover:bg-purple-500/20 hover:border-purple-500/50 hover:-translate-y-0.5 transition-all shadow-[0_5px_20px_-5px_rgba(168,85,247,0.15)] flex items-center justify-center gap-2">
+                            <span className="text-xl">🧩</span> Кеңейтімді жүктеу
+                        </a>
                         <a href="#features" className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-slate-800/50 backdrop-blur-md border border-slate-700/50 text-white font-bold text-base hover:bg-slate-700/50 transition-colors">
                             Толығырақ білу
                         </a>
