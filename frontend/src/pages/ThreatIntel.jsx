@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { API_URL } from '../config'
+import api from '../api'
 
 export default function ThreatIntel() {
     const [domains, setDomains] = useState([])
@@ -13,7 +13,7 @@ export default function ThreatIntel() {
     const fetchDomains = async () => {
         try {
             setLoading(true)
-            const res = await axios.get(`${API_URL}/api/dangerous-domains?limit=50`)
+            const res = await api.get(`/api/dangerous-domains?limit=50`)
             setDomains(res.data.dangerous_domains || [])
         } catch (error) {
             console.error("Failed to fetch dangerous domains", error)
@@ -23,7 +23,8 @@ export default function ThreatIntel() {
     }
 
     const downloadReport = (domain) => {
-        window.open(`${API_URL}/api/admin/forensics/${domain}/report`, '_blank')
+        // Since api.defaults.baseURL already points to backend, we create absolute URL
+        window.open(`${api.defaults.baseURL || ''}/api/admin/forensics/${domain}/report`, '_blank')
     }
 
     return (
