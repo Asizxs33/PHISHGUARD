@@ -24,6 +24,7 @@ from ml.page_analyzer import analyze_page_content
 from ml.phone_analyzer import analyze_phone as do_analyze_phone
 from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS, analyze_call_transcript, analyze_image_text
 from ml.forensics import gather_forensics
+from ml.osint_scanner import start_osint_scanner, stop_osint_scanner
 from database import init_db, get_db, save_analysis, get_history, get_stats, save_dangerous_domain, get_dangerous_domains, SessionLocal
 
 def process_forensics_task(domain: str, source: str, risk_level: str):
@@ -73,6 +74,15 @@ def startup():
 
     if not email_classifier.load('email_model'):
         print("⚠️ Email model not found.")
+
+    # Start the background OSINT threat scanner
+    start_osint_scanner()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    """Clean up background processes."""
+    stop_osint_scanner()
 
 
 # ─── Request/Response Models ─────────────────────────────────────────────
@@ -927,7 +937,7 @@ async def analyze_video(file: UploadFile = File(...)):
 def api_generate_simulation():
     """Generates a random phishing scenario using the LLM for the training simulator."""
     try:
-        from .ml.cyber_advisor import generate_phishing_simulation
+        from ml.cyber_advisor import generate_phishing_simulation
         scenario = generate_phishing_simulation()
         return {"scenario": scenario}
     except Exception as e:
