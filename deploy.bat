@@ -19,6 +19,7 @@ if not exist venv (
 )
 call venv\Scripts\activate
 pip install -r requirements.txt
+playwright install chromium
 cd ..
 
 echo.

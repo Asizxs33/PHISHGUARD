@@ -12,8 +12,9 @@ import re
 from urllib.parse import urlparse, urljoin
 from .heuristic_analyzer import BRAND_DOMAINS
 
-# Time to wait for a website to respond
+# Time to wait for a website to respond via requests
 REQUEST_TIMEOUT = 5.0
+PLAYWRIGHT_TIMEOUT = 12000 # 12 seconds for deep execution
 
 # User-Agent to avoid being immediately blocked by basic bot protection
 HEADERS = {
@@ -108,20 +109,45 @@ def analyze_page_content(url: str, provided_html: str = None) -> List[Dict[str, 
         html_content = provided_html
     else:
         try:
-            response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, verify=False)
-            response.raise_for_status()
-            
-            # FIX: Some phishing/casino sites (like sultan.egull.golf) do not send proper charset headers.
-            # requests defaults to ISO-8859-1 which corrupts Cyrillic characters.
-            # We force UTF-8 if the apparent encoding is different, or fallback to apparent.
-            if response.encoding and response.encoding.lower() == 'iso-8859-1':
-                response.encoding = response.apparent_encoding or 'utf-8'
+            # Try Playwright first for deep evaluation (rendering JS/obfuscated code)
+            from playwright.sync_api import sync_playwright
+            try:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    context = browser.new_context(
+                        user_agent=HEADERS['User-Agent'],
+                        viewport={'width': 1280, 'height': 720},
+                        ignore_https_errors=True
+                    )
+                    page = context.new_page()
+                    
+                    # Block heavy assets to speed up extraction and save RAM
+                    page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                    
+                    # Wait until network is mostly idle to let JS execute
+                    page.goto(url, timeout=PLAYWRIGHT_TIMEOUT, wait_until="networkidle")
+                    # Extra wait for delayed obfuscation unpacking (timeouts)
+                    page.wait_for_timeout(1500)
+                    html_content = page.content()
+                    browser.close()
+            except Exception as pe:
+                print(f"Playwright execution failed ({pe}), falling back to requests for {url}")
+                raise pe # Trigger fallback execution
                 
-            html_content = response.text
-        except Exception as e:
-            # We fail silently if we can't reach the page (maybe offline, maybe bot protection)
-            print(f"Content Analyzer: Could not fetch {url}: {e}")
-            return issues
+        except Exception:
+            # Fallback to requests if Playwright fails or times out
+            try:
+                response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT, verify=False)
+                response.raise_for_status()
+                
+                # FIX: Corrupted Cyrillic characters handling
+                if response.encoding and response.encoding.lower() == 'iso-8859-1':
+                    response.encoding = response.apparent_encoding or 'utf-8'
+                    
+                html_content = response.text
+            except Exception as req_e:
+                print(f"Content Analyzer: Could not fetch {url}: {req_e}")
+                return issues
         
     soup = BeautifulSoup(html_content, 'html.parser')
     
