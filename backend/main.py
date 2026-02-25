@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from ml.features import extract_url_features, extract_email_features, get_url_feature_names, get_email_feature_names
 from ml.classifier import PhishingClassifier
 from ml.heuristic_analyzer import analyze_url_heuristic, combine_scores
+from ml.page_analyzer import analyze_page_content
 from ml.phone_analyzer import analyze_phone as do_analyze_phone
 from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS
 from database import init_db, get_db, save_analysis, get_history, get_stats
@@ -149,6 +150,76 @@ def generate_detailed_analysis(features: dict, analysis_type: str, heuristic_iss
                         "kz": "⚠️ Сайт аты арнайы кодталған (Punycode). Ол нағыз сайтқа ұқсап көрінуі мүмкін, бірақ мүлдем басқа жерге апарады.",
                         "ru": "⚠️ Адрес сайта закодирован особым образом (Punycode). Он может выглядеть как настоящий, но ведёт совсем в другое место.",
                         "en": "⚠️ The domain uses special encoding (Punycode). It may look real but actually leads somewhere else."
+                    })
+                    
+                elif issue_type == 'osint_blacklist':
+                    details.append({
+                        "kz": "🚨 ӨТЕ ҚАУІПТІ: Бұл домен халықаралық фишинг дерекқорларында (OpenPhish) қара тізімде тұр! Бұған кіруге қатаң тыйым салынады.",
+                        "ru": "🚨 КРИТИЧЕСКИ ОПАСНО: Данный домен находится в глобальном черном списке мошенников (OpenPhish)! Не вводите здесь никакие данные.",
+                        "en": "🚨 CRITICAL DANGER: This domain is blacklisted in global phishing databases (OpenPhish)! Do not enter any information."
+                    })
+
+                elif issue_type == 'casino_content':
+                    details.append({
+                        "kz": "🎰 Бұл сайттың мазмұнында онлайн казино немесе құмар ойындар туралы айтылған. Қазақстанда мұндай сайттардың көбі заңсыз және бұғатталуы мүмкін. Өз қаражатыңызға қырағы болыңыз.",
+                        "ru": "🎰 Содержимое сайта указывает на онлайн-казино или рекламу азартных игр. В Казахстане многие такие ресурсы нелегальны. Будьте осторожны со своими деньгами.",
+                        "en": "🎰 The page content indicates online casino or gambling services. Exercise caution as these may be illegal or high-risk."
+                    })
+
+                elif issue_type == 'phishing_content':
+                    details.append({
+                        "kz": "⚠️ Бұл сайт күдікті жерде сізден құпиясөз, карта мәліметтері немесе жеке деректерді сұрап тұр. Бұл — фишинг (алдау) белгісі.",
+                        "ru": "⚠️ Сайт просит ввести пароль, данные карты или личную информацию в подозрительном контексте. Это явный признак фишинга!",
+                        "en": "⚠️ The site is asking for passwords, card details, or sensitive personal info in a suspicious context. High phishing risk!"
+                    })
+
+                elif issue_type == 'external_form_action':
+                    details.append({
+                        "kz": "🚨 ҚАУІПТІ: Сайттағы форма сіздің мәліметтеріңізді бөтен, белгісіз доменге жібереді! Бұл құпиясөз ұрлаудың классикалық тәсілі.",
+                        "ru": "🚨 ОПАСНО: Форма на сайте отправляет ваши данные на чужой, неизвестный домен! Это классический способ кражи паролей.",
+                        "en": "🚨 DANGER: A form on this site submits your data to a totally different, unknown domain! This is a classic password theft technique."
+                    })
+
+                elif issue_type == 'credit_card_form_detected':
+                    details.append({
+                        "kz": "💳 Назар аударыңыз: Бұл сайт сіздің банк картаңыздың (CVV, нөмір) мәліметтерін сұрайды. Бұл ресми банк сайты екеніне 100% көз жеткізіңіз!",
+                        "ru": "💳 Внимание: Сайт просит ввести данные банковской карты (CVV, номер). Убедитесь на 100%, что это официальный сайт банка или магазина!",
+                        "en": "💳 Warning: This site explicitly asks for Credit Card details (CVV, number). Make absolutely sure it's an official website!"
+                    })
+
+                elif issue_type == 'high_dead_link_ratio':
+                    details.append({
+                        "kz": "🔗 Күдікті: Бұл сайттағы батырмалар мен сілтемелердің көбісі жұмыс істемейді (бос). Фишинг сайттар жиі дизайнды көшіріп, сілтемелерді жалғауды ұмытып кетеді.",
+                        "ru": "🔗 Подозрительно: На сайте очень много нерабочих (пустых) ссылок и кнопок. Фишинговые сайты часто копируют дизайн, но забывают сделать страницы.",
+                        "en": "🔗 Suspicious: Many buttons and links on this site are dead (lead nowhere). Phishing sites often copy design but don't build inner pages."
+                    })
+
+                elif issue_type == 'hidden_suspicious_content':
+                    details.append({
+                        "kz": "🕵️ Бұл сайт антивирустарды алдау үшін белгілі банктердің аттарын кодтың ішіне көрінбейтін етіп жасырып қойған.",
+                        "ru": "🕵️ Сайт прячет невидимый текст с названиями банков в коде. Так мошенники пытаются обмануть антивирусы.",
+                        "en": "🕵️ The site hides invisible text with bank names in its code. Scammers do this to trick antivirus scanners."
+                    })
+
+                elif issue_type == 'right_click_disabled':
+                    details.append({
+                        "kz": "🖱️ Сайт тышқанның оң жақ батырмасын немесе мәтін көшіруді бұғаттаған. Бұл кодты жасыру үшін жасалуы мүмкін.",
+                        "ru": "🖱️ Сайт блокирует правую кнопку мыши или выделение текста. Часто так делают, чтобы скрыть мошеннический код.",
+                        "en": "🖱️ The site blocks right-clicks or text copying. This is often done to hide malicious code from inspection."
+                    })
+
+                elif issue_type == 'suspicious_iframe':
+                    details.append({
+                        "kz": "🚨 Сайттың ішінде көрінбейтін үлкен терезе бар! Ол басқа зиянды сайтты сізге білдірмей жүктеп жаруы мүмкін.",
+                        "ru": "🚨 Сайт содержит огромное скрытое окно (iframe)! Он пытается незаметно загрузить чужой и возможно опасный сайт поверх этого.",
+                        "en": "🚨 The site contains a massive iframe! It is trying to load a different, potentially malicious website stealthily."
+                    })
+
+                elif issue_type in ['meta_refresh_redirect', 'javascript_redirect']:
+                    details.append({
+                        "kz": "🔀 Сайт сізді байқатпай басқа (қауіпті) парақшаға автоматты түрде бағыттайды (Авто-редирект).",
+                        "ru": "🔀 Сайт пытается автоматически и незаметно перенаправить вас на другую (вероятно опасную) страницу (Авто-редирект).",
+                        "en": "🔀 The site contains scripts to automatically redirect you to another (likely dangerous) page without your consent."
                     })
 
         # ── Feature-based alerts ──
@@ -374,11 +445,43 @@ def get_risk_level(score: float) -> str:
 
 @app.post("/api/analyze-url", response_model=AnalysisResponse)
 def analyze_url(request: UrlRequest, db: Session = Depends(get_db)):
-    """Analyze a URL for phishing indicators using ML + Heuristic ensemble."""
+    """Analyze a URL for phishing indicators using ML + Heuristic ensemble + Content Scraping."""
 
     # ── Step 1: Heuristic Analysis (always available, no model needed) ──
     h_score, h_verdict, h_details = analyze_url_heuristic(request.url)
     heuristic_issues = h_details.get('issues', [])
+    
+    # ── Step 1.5: Content Scraping Analysis ──
+    try:
+        content_issues = analyze_page_content(request.url)
+        if content_issues:
+            heuristic_issues.extend(content_issues)
+            
+            # Recalculate heuristic score incorporating content severity
+            severities = sorted([issue.get('severity', 0) for issue in heuristic_issues], reverse=True)
+            if severities:
+                top_severities = severities[:5]
+                max_severity = top_severities[0]
+                issue_bonus = min(0.15, len(heuristic_issues) * 0.03)
+                if len(top_severities) > 1:
+                    avg_severity = sum(top_severities) / len(top_severities)
+                    h_score = max_severity * 0.6 + avg_severity * 0.25 + issue_bonus
+                else:
+                    h_score = max_severity * 0.85 + issue_bonus
+                h_score = min(1.0, max(0.0, round(h_score, 4)))
+                
+                if h_score < 0.3:
+                    h_verdict = "safe"
+                elif h_score < 0.65:
+                    h_verdict = "suspicious"
+                else:
+                    h_verdict = "phishing"
+                
+                h_details['issues'] = heuristic_issues
+                h_details['heuristic_score'] = h_score
+                h_details['checks_performed'] = h_details.get('checks_performed', []) + ['page_content_analysis']
+    except Exception as e:
+        print(f"Content Analysis failed for {request.url}: {e}")
 
     # ── Step 2: ML Model Prediction ──
     features = extract_url_features(request.url)
@@ -495,9 +598,39 @@ def analyze_qr(file: UploadFile = File(...), db: Session = Depends(get_db)):
         if not decoded_url:
             raise HTTPException(status_code=422, detail="No QR code found in the image or QR code is empty.")
 
-        # ── Ensemble Analysis (ML + Heuristic) ──
+        # ── Ensemble Analysis (ML + Heuristic + Content) ──
         h_score, h_verdict, h_details = analyze_url_heuristic(decoded_url)
         heuristic_issues = h_details.get('issues', [])
+        
+        try:
+            content_issues = analyze_page_content(decoded_url)
+            if content_issues:
+                heuristic_issues.extend(content_issues)
+                
+                severities = sorted([issue.get('severity', 0) for issue in heuristic_issues], reverse=True)
+                if severities:
+                    top_severities = severities[:5]
+                    max_severity = top_severities[0]
+                    issue_bonus = min(0.15, len(heuristic_issues) * 0.03)
+                    if len(top_severities) > 1:
+                        avg_severity = sum(top_severities) / len(top_severities)
+                        h_score = max_severity * 0.6 + avg_severity * 0.25 + issue_bonus
+                    else:
+                        h_score = max_severity * 0.85 + issue_bonus
+                    h_score = min(1.0, max(0.0, round(h_score, 4)))
+                    
+                    if h_score < 0.3:
+                        h_verdict = "safe"
+                    elif h_score < 0.65:
+                        h_verdict = "suspicious"
+                    else:
+                        h_verdict = "phishing"
+                    
+                    h_details['issues'] = heuristic_issues
+                    h_details['heuristic_score'] = h_score
+                    h_details['checks_performed'] = h_details.get('checks_performed', []) + ['page_content_analysis']
+        except Exception as e:
+            print(f"QR Content Analysis failed for {decoded_url}: {e}")
 
         features = extract_url_features(decoded_url)
         feature_names = get_url_feature_names()
