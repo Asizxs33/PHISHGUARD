@@ -19,8 +19,11 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 # Install remaining dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers and dependencies
-RUN apt-get update && playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
+# Install system dependencies for Chromium to avoid Playwright's --with-deps bug on debian
+RUN apt-get update && apt-get install -y --no-install-recommends chromium && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright browser
+RUN playwright install chromium
 
 # Copy application code
 COPY . .
