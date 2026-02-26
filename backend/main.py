@@ -24,7 +24,9 @@ from ml.page_analyzer import analyze_page_content
 from ml.phone_analyzer import analyze_phone as do_analyze_phone
 from ml.cyber_advisor import get_chat_response, SUGGESTED_QUESTIONS, analyze_call_transcript, analyze_image_text
 from ml.forensics import gather_forensics
-from ml.osint_scanner import start_osint_scanner, stop_osint_scanner
+OSINT_ENABLED = os.environ.get("OSINT_ENABLED", "false").lower() == "true"
+if OSINT_ENABLED:
+    from ml.osint_scanner import start_osint_scanner, stop_osint_scanner
 from database import init_db, get_db, save_analysis, get_history, get_stats, save_dangerous_domain, get_dangerous_domains, SessionLocal
 
 def process_forensics_task(domain: str, source: str, risk_level: str):
@@ -75,14 +77,16 @@ def startup():
     if not email_classifier.load('email_model'):
         print("⚠️ Email model not found.")
 
-    # Start the background OSINT threat scanner
-    start_osint_scanner()
+    # Start the background OSINT threat scanner (only if enabled)
+    if OSINT_ENABLED:
+        start_osint_scanner()
 
 
 @app.on_event("shutdown")
 def shutdown():
     """Clean up background processes."""
-    stop_osint_scanner()
+    if OSINT_ENABLED:
+        stop_osint_scanner()
 
 
 # ─── Request/Response Models ─────────────────────────────────────────────
