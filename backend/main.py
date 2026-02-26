@@ -1033,21 +1033,46 @@ def get_forensic_report(domain: str, db: Session = Depends(get_db)):
 
 @app.get("/api/dangerous-domains/download", response_class=PlainTextResponse)
 def api_download_dangerous_domains(db: Session = Depends(get_db)):
-    """Download the list of confirmed dangerous domains as a text file."""
+    """Download the list of confirmed dangerous domains as a CSV file."""
     domains = get_dangerous_domains(db, 10000)
     
-    lines = ["# CyberQalqan AI - Dangerous Domains List", 
-             f"# Generated: {datetime.utcnow().isoformat()}", 
-             "# Format: domain,source,risk_level",
-             ""]
+    # We use a simple CSV format: Domain, IP Address, Location, Reason/Source, Risk Level, Detection Date
+    lines = [
+        "Domain,IP Address,Location,Reason/Source,Risk Level,Detection Date"
+    ]
     
     for d in domains:
-        lines.append(f"{d['domain']},{d['source']},{d['risk_level']}")
+        ip = "Unknown"
+        loc = "Unknown"
+        
+        # Try processing stored forensics JSON
+        if d.get('forensics_data'):
+            try:
+                f_data = json.loads(d['forensics_data'])
+                ip = f_data.get('ip_address', 'Unknown')
+                geo = f_data.get('geo_location', {})
+                country = geo.get('country', '')
+                city = geo.get('city', '')
+                loc = f"{city} {country}".strip().replace(',', ' ') or "Unknown"
+            except:
+                pass
+                
+        # Clean data for CSV
+        domain = d.get('domain', '').replace(',', ' ')
+        source = d.get('source', '').replace(',', ' ')
+        risk = d.get('risk_level', '').replace(',', ' ')
+        date_str = d.get('timestamp', '').replace(',', ' ')
+        
+        lines.append(f"{domain},{ip},{loc},{source},{risk},{date_str}")
         
     content = "\n".join(lines)
     
+    # Add UTF-8 BOM so Excel opens it with correct encoding
+    content = '\ufeff' + content
+    
     headers = {
-        "Content-Disposition": "attachment; filename=dangerous_domains.txt"
+        "Content-Disposition": "attachment; filename=threat_intel_report.csv",
+        "Content-Type": "text/csv; charset=utf-8"
     }
     return PlainTextResponse(content=content, headers=headers)
 
