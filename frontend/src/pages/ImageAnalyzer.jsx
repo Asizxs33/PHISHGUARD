@@ -95,9 +95,42 @@ export default function ImageAnalyzer() {
                     <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-orange-500/30 rounded-br-md" />
 
                     {preview ? (
-                        <div>
-                            <img src={preview} alt="Upload Preview" className="max-w-[300px] max-h-[300px] rounded-xl border border-white/10 mx-auto shadow-2xl shadow-orange-500/10 object-contain" />
+                        <div className="flex flex-col items-center">
+                            <div className="relative inline-block rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-orange-500/10 bg-black/50">
+                                <img src={preview} alt="Upload Preview" className="max-w-[300px] max-h-[300px] object-contain block" />
+
+                                {loading && (
+                                    <div className="absolute inset-0 z-20 pointer-events-none rounded-xl overflow-hidden">
+                                        <div className="absolute inset-0 bg-orange-500/10 animate-pulse mix-blend-overlay"></div>
+
+                                        {/* Grid background */}
+                                        <div className="absolute inset-0 opacity-50 bg-[linear-gradient(rgba(249,115,22,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(249,115,22,0.15)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+
+                                        {/* Animated scanner line */}
+                                        <div className="absolute top-0 left-0 right-0 h-full w-full opacity-0"
+                                            style={{ animation: 'scanImage 2.5s ease-in-out infinite' }}>
+                                            <div className="absolute bottom-0 left-0 right-0 h-32 w-full bg-gradient-to-t from-orange-500/40 to-transparent"></div>
+                                            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-orange-400 shadow-[0_0_15px_3px_rgba(249,115,22,1)]"></div>
+                                        </div>
+
+                                        {/* Targeted corners */}
+                                        <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-orange-500 opacity-80" />
+                                        <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-orange-500 opacity-80" />
+                                        <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-orange-500 opacity-80" />
+                                        <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-orange-500 opacity-80" />
+                                    </div>
+                                )}
+                            </div>
                             <div className="text-slate-500 text-xs font-mono mt-3">{file?.name}</div>
+
+                            <style>{`
+                                @keyframes scanImage {
+                                    0% { transform: translateY(-100%); opacity: 0; }
+                                    10% { opacity: 1; }
+                                    90% { opacity: 1; }
+                                    100% { transform: translateY(0%); opacity: 0; }
+                                }
+                            `}</style>
                         </div>
                     ) : (
                         <div>

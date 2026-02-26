@@ -47,7 +47,13 @@ export default function ThreatIntel() {
 
     const downloadReport = (domain) => {
         // Since api.defaults.baseURL already points to backend, we create absolute URL
-        window.open(`${api.defaults.baseURL || ''}/api/admin/forensics/${domain}/report`, '_blank')
+        const base = (api.defaults.baseURL || '').replace(/\/$/, '');
+        window.open(`${base}/admin/forensics/${domain}/report`, '_blank')
+    }
+
+    const downloadAllDomainsCSV = () => {
+        const base = (api.defaults.baseURL || '').replace(/\/$/, '');
+        window.open(`${base}/dangerous-domains/download`, '_blank')
     }
 
     return (
@@ -71,9 +77,14 @@ export default function ThreatIntel() {
             <div className="glass-panel p-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-semibold text-white">Выявленные Угрозы (Dangerous Domains)</h2>
-                    <button onClick={fetchDomains} className="btn-secondary px-4 py-2 text-xs">
-                        Жаңарту (Refresh)
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={downloadAllDomainsCSV} className="px-4 py-2 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-semibold flexItems-center gap-2">
+                            ⬇️ Скачать общую базу (CSV)
+                        </button>
+                        <button onClick={fetchDomains} className="btn-secondary px-4 py-2 text-xs">
+                            Жаңарту (Refresh)
+                        </button>
+                    </div>
                 </div>
 
                 {loading ? (

@@ -23,6 +23,21 @@ export default function PhishingSimulator() {
         setResultView(isPass ? 'pass' : 'fail')
     }
 
+    const getLocalized = (field) => {
+        if (!scenario) return '';
+        // If the backend returned flat keys like message_ru
+        if (scenario[`${field}_${activeLang}`]) return scenario[`${field}_${activeLang}`];
+        if (scenario[`${field}_ru`]) return scenario[`${field}_ru`];
+        if (scenario[`${field}_kz`]) return scenario[`${field}_kz`];
+
+        // If it's an object
+        if (scenario[field]) {
+            if (typeof scenario[field] === 'string') return scenario[field];
+            return scenario[field][activeLang] || scenario[field].ru || scenario[field].kz || '';
+        }
+        return '';
+    }
+
     const getPlatformIcon = (platform) => {
         if (!platform) return '📧'
         const p = platform.toLowerCase()
@@ -104,10 +119,10 @@ export default function PhishingSimulator() {
                     <div className="glass rounded-2xl p-0 overflow-hidden mb-6 border-slate-700/50">
                         {/* Mock UI Header */}
                         <div className="bg-slate-900/80 px-4 py-3 border-b border-slate-700/50 flex items-center gap-3">
-                            <div className="text-2xl">{getPlatformIcon(scenario.platform)}</div>
+                            <div className="text-2xl">{getPlatformIcon(scenario.platform || scenario.type)}</div>
                             <div>
-                                <div className="text-sm font-bold text-slate-200">{scenario.sender_name || 'Unknown Sender'}</div>
-                                <div className="text-xs text-slate-500">{scenario.platform || 'Message'}</div>
+                                <div className="text-sm font-bold text-slate-200">{scenario.sender_name || scenario.sender || 'Unknown Sender'}</div>
+                                <div className="text-xs text-slate-500">{scenario.platform || scenario.type || 'Message'}</div>
                             </div>
                         </div>
 
@@ -115,7 +130,7 @@ export default function PhishingSimulator() {
                         <div className="p-6 bg-[#0B0F19]">
                             <div className="bg-slate-800/50 rounded-2xl rounded-tl-none p-4 max-w-[85%] border border-slate-700/50">
                                 <div className="text-slate-200 whitespace-pre-line text-[15px] leading-relaxed">
-                                    {scenario.message[activeLang] || scenario.message.ru}
+                                    {getLocalized('message') || 'No message generated.'}
                                 </div>
                             </div>
                         </div>
@@ -149,7 +164,7 @@ export default function PhishingSimulator() {
                                         {resultView === 'pass' ? 'Дұрыс! Бұл фишинг еді. / Правильно! Это был фишинг.' : 'Қате! Сіз алаяқтарға алдандыңыз. / Ошибка! Вы попались на уловку.'}
                                     </h3>
                                     <p className="text-slate-300 whitespace-pre-line leading-relaxed">
-                                        {scenario.explanation[activeLang] || scenario.explanation.ru}
+                                        {getLocalized('explanation')}
                                     </p>
                                 </div>
                             </div>
@@ -162,7 +177,7 @@ export default function PhishingSimulator() {
                                     {(scenario.indicators || []).map((indicator, idx) => (
                                         <li key={idx} className="flex gap-2 text-sm text-slate-300">
                                             <span className="text-orange-400 mt-0.5">🚩</span>
-                                            <span>{indicator[activeLang] || indicator.ru || indicator}</span>
+                                            <span>{indicator?.[activeLang] || indicator?.ru || String(indicator || '')}</span>
                                         </li>
                                     ))}
                                 </ul>

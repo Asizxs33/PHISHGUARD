@@ -135,10 +135,10 @@ export function ResultCard({ result }) {
                             <li key={i} className="text-sm text-slate-400 flex flex-col gap-1">
                                 <div className="flex gap-3">
                                     <span className="text-orange-500/50 font-mono text-xs mt-0.5">[{String(i + 1).padStart(2, '0')}]</span>
-                                    <span className="text-slate-300">{item.kz}</span>
+                                    <span className="text-slate-300">{item?.kz}</span>
                                 </div>
                                 <div className="pl-9 text-xs text-slate-500 font-light max-w-[90%]">
-                                    {item.ru}
+                                    {item?.ru}
                                 </div>
                             </li>
                         ))}
